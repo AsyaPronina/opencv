@@ -68,7 +68,7 @@ char* icvGets( CvFileStorage* fs, char* str, int maxCount )
         char* ptr = fgets( str, maxCount, fs->file );
         if (ptr && maxCount > 256 && !(fs->flags & cv::FileStorage::BASE64))
         {
-            size_t sz = strnlen(ptr, maxCount);
+            size_t sz = strlen(ptr);
             CV_Assert(sz < (size_t)(maxCount - 1) && "OpenCV persistence doesn't support very long lines");
         }
         return ptr;
@@ -79,7 +79,7 @@ char* icvGets( CvFileStorage* fs, char* str, int maxCount )
         char* ptr = gzgets( fs->gzfile, str, maxCount );
         if (ptr && maxCount > 256 && !(fs->flags & cv::FileStorage::BASE64))
         {
-            size_t sz = strnlen(ptr, maxCount);
+            size_t sz = strlen(ptr);
             CV_Assert(sz < (size_t)(maxCount - 1) && "OpenCV persistence doesn't support very long lines");
         }
         return ptr;

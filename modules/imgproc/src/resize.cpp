@@ -87,10 +87,10 @@ static void hlineResize(ET* src, int cn, int *ofst, FT* m, FT* dst, int dst_min,
         ET* src_ofst = src + cn*ofst[i];
         for (int j = 0; j < cn; j++, dst++)
         {
-            *dst = (mulall || !m[0].isZero()) ? m[0] * src_ofst[j] : FT::zero();
+            *dst = (mulall || !m[0].isZero()) ? m[0] * src_ofst[j] : float(FT::zero());
             for (int k = 1; k < n; k++)
             {
-                *dst = *dst + ((mulall || !m[k].isZero()) ? m[k] * src_ofst[j+k*cn] : FT::zero());
+                *dst = *dst + ((mulall || !m[k].isZero()) ? m[k] * src_ofst[j+k*cn] : float(FT::zero()));
             }
         }
     }

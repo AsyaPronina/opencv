@@ -901,10 +901,9 @@ String tempfile( const char* suffix )
         fname = fname + "__opencv_temp.XXXXXX";
     }
 
-    const int fd = mkstemp((char*)fname.c_str());
-    if (fd == -1) return String();
+    FILE* fd = fopen((char*)fname.c_str(), "a");
 
-    close(fd);
+    fclose(fd);
     remove(fname.c_str());
 # endif
 
@@ -1625,7 +1624,7 @@ inline bool parseOption(const std::string & value)
     {
         return false;
     }
-    throw ParseError(value);
+    return false;
 }
 
 template<>
@@ -1646,7 +1645,7 @@ inline size_t parseOption(const std::string &value)
         return v * 1024 * 1024;
     else if (suffixStr == "KB" || suffixStr == "Kb" || suffixStr == "kb")
         return v * 1024;
-    throw ParseError(value);
+    return false;
 }
 
 template<>

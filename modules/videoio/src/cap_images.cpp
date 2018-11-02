@@ -213,7 +213,9 @@ static char* icvExtractPattern(const char *filename, unsigned *offset)
         unsigned int dummy;
         if(sscanf(at + 1, "%ud", &dummy) != 1)
             return 0;
-        name = strdup(filename);
+        char *buf = new char[300];
+        strcpy(buf, filename);
+        name = buf;
     }
     else // no pattern filename was given - extract the pattern
     {

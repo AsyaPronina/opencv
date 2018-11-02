@@ -222,10 +222,10 @@ static float64_t f64_cos( float64_t x );
 | softfloat and softdouble methods and members
 *----------------------------------------------------------------------------*/
 
-softfloat::softfloat( const uint32_t a ) { *this = ui32_to_f32(a); }
-softfloat::softfloat( const uint64_t a ) { *this = ui64_to_f32(a); }
-softfloat::softfloat( const  int32_t a ) { *this =  i32_to_f32(a); }
-softfloat::softfloat( const  int64_t a ) { *this =  i64_to_f32(a); }
+//softfloat::softfloat( const uint32_t a ) { *this = ui32_to_f32(a); }
+//softfloat::softfloat( const uint64_t a ) { *this = ui64_to_f32(a); }
+//softfloat::softfloat( const  int32_t a ) { *this =  i32_to_f32(a); }
+//softfloat::softfloat( const  int64_t a ) { *this =  i64_to_f32(a); }
 
 softfloat::operator softdouble() const { return f32_to_f64(*this); }
 
@@ -242,10 +242,10 @@ bool softfloat::operator >= ( const softfloat& a ) const { return  f32_le(a, *th
 bool softfloat::operator <  ( const softfloat& a ) const { return  f32_lt(*this, a); }
 bool softfloat::operator <= ( const softfloat& a ) const { return  f32_le(*this, a); }
 
-softdouble::softdouble( const uint32_t a ) { *this = ui32_to_f64(a); }
-softdouble::softdouble( const uint64_t a ) { *this = ui64_to_f64(a); }
-softdouble::softdouble( const  int32_t a ) { *this =  i32_to_f64(a); }
-softdouble::softdouble( const  int64_t a ) { *this =  i64_to_f64(a); }
+//softdouble::softdouble( const uint32_t a ) { *this = ui32_to_f64(a); }
+//softdouble::softdouble( const uint64_t a ) { *this = ui64_to_f64(a); }
+//softdouble::softdouble( const  int32_t a ) { *this =  i32_to_f64(a); }
+//softdouble::softdouble( const  int64_t a ) { *this =  i64_to_f64(a); }
 
 }
 

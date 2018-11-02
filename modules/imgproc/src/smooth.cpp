@@ -1890,7 +1890,7 @@ void hlineSmooth3N<uint8_t, ufixedpoint16>(const uint8_t* src, int cn, const ufi
 {
     if (len == 1)
     {
-        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? m[0] + m[1] + m[2] : m[1];
+        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? m[0] + m[1] + m[2] : float(m[1]);
         for (int k = 0; k < cn; k++)
             dst[k] = msum * src[k];
     }
@@ -2064,7 +2064,7 @@ void hlineSmooth3Naba<uint8_t, ufixedpoint16>(const uint8_t* src, int cn, const 
 {
     if (len == 1)
     {
-        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? (m[0]<<1) + m[1] : m[1];
+        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? (m[0]<<1) + m[1] : float(m[1]);
         for (int k = 0; k < cn; k++)
             dst[k] = msum * src[k];
     }
@@ -2210,7 +2210,7 @@ void hlineSmooth5N<uint8_t, ufixedpoint16>(const uint8_t* src, int cn, const ufi
 {
     if (len == 1)
     {
-        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? m[0] + m[1] + m[2] + m[3] + m[4] : m[2];
+        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? m[0] + m[1] + m[2] + m[3] + m[4] : float(m[2]);
         for (int k = 0; k < cn; k++)
             dst[k] = msum * src[k];
     }
@@ -2617,7 +2617,7 @@ void hlineSmooth5Nabcba<uint8_t, ufixedpoint16>(const uint8_t* src, int cn, cons
 {
     if (len == 1)
     {
-        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? ((m[0] + m[1]) << 1) + m[2] : m[2];
+        ufixedpoint16 msum = borderType != BORDER_CONSTANT ? (int((m[0] + m[1])) << 1) + m[2] : float(m[2]);
         for (int k = 0; k < cn; k++)
             dst[k] = msum * src[k];
     }
@@ -3518,16 +3518,16 @@ public:
         {
             if (kx[0] == (FT::one()>>2)&&kx[1] == (FT::one()>>1)&&kx[2] == (FT::one()>>2))
                 hlineSmoothFunc = hlineSmooth3N121;
-            else if ((kx[0] - kx[2]).isZero())
+            else if (ufixedpoint16((kx[0] - kx[2])).isZero())
                     hlineSmoothFunc = hlineSmooth3Naba;
             else
                 hlineSmoothFunc = hlineSmooth3N;
         }
         else if (kxlen == 5)
         {
-            if (kx[2] == (FT::one()*(uint8_t)3>>3) &&
-                kx[1] == (FT::one()>>2) && kx[3] == (FT::one()>>2) &&
-                kx[0] == (FT::one()>>4) && kx[4] == (FT::one()>>4))
+            if (kx[2] == (int(FT::one()*(uint8_t)3)>>3) &&
+                kx[1] == (int(FT::one())>>2) && kx[3] == (int(FT::one())>>2) &&
+                kx[0] == (int(FT::one())>>4) && kx[4] == (int(FT::one())>>4))
                 hlineSmoothFunc = hlineSmooth5N14641;
             else if (kx[0] == kx[4] && kx[1] == kx[3])
                 hlineSmoothFunc = hlineSmooth5Nabcba;
@@ -3562,7 +3562,7 @@ public:
         }
         else if (kylen == 5)
         {
-            if (ky[2] == (FT::one() * (uint8_t)3 >> 3) &&
+            if (ky[2] == (int(FT::one() * (uint8_t)3) >> 3) &&
                 ky[1] == (FT::one() >> 2) && ky[3] == (FT::one() >> 2) &&
                 ky[0] == (FT::one() >> 4) && ky[4] == (FT::one() >> 4))
                 vlineSmoothFunc = vlineSmooth5N14641;

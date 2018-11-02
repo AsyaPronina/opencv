@@ -106,10 +106,10 @@ public:
     static const softfloat fromRaw( const uint32_t a ) { softfloat x; x.v = a; return x; }
 
     /** @brief Construct from integer */
-    explicit softfloat( const uint32_t );
-    explicit softfloat( const uint64_t );
-    explicit softfloat( const int32_t );
-    explicit softfloat( const int64_t );
+    //explicit softfloat( const uint32_t );
+    //explicit softfloat( const uint64_t );
+    //explicit softfloat( const int32_t );
+    //explicit softfloat( const int64_t );
 
 #ifdef CV_INT32_T_IS_LONG_INT
     // for platforms with int32_t = long int
@@ -243,10 +243,10 @@ public:
     static softdouble fromRaw( const uint64_t a ) { softdouble x; x.v = a; return x; }
 
     /** @brief Construct from integer */
-    explicit softdouble( const uint32_t );
-    explicit softdouble( const uint64_t );
-    explicit softdouble( const  int32_t );
-    explicit softdouble( const  int64_t );
+    //explicit softdouble( const uint32_t );
+    //explicit softdouble( const uint64_t );
+    //explicit softdouble( const  int32_t );
+    //explicit softdouble( const  int64_t );
 
 #ifdef CV_INT32_T_IS_LONG_INT
     // for platforms with int32_t = long int
