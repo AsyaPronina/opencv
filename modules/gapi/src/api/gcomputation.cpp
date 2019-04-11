@@ -72,8 +72,12 @@ cv::GComputation::GComputation(cv::GProtoInputArgs &&ins,
 cv::GCompiled cv::GComputation::compile(GMetaArgs &&metas, GCompileArgs &&args)
 {
     // FIXME: Cache gcompiled per parameters here?
-    cv::gimpl::GCompiler comp(*this, std::move(metas), std::move(args));
-    return comp.compile();
+  cv::GCompiled rv;
+  profile("GComputation::compile()", [&](){
+      cv::gimpl::GCompiler comp(*this, std::move(metas), std::move(args));
+      rv =  comp.compile();
+    });
+  return rv;
 }
 
 // FIXME: Introduce similar query/test method for GMetaArgs as a building block
@@ -100,6 +104,7 @@ static bool formats_are_same(const cv::GMetaArgs& metas1, const cv::GMetaArgs& m
 
 void cv::GComputation::apply(GRunArgs &&ins, GRunArgsP &&outs, GCompileArgs &&args)
 {
+  profile("GComputation::apply()", [&](){
     const auto in_metas = descr_of(ins);
     // FIXME Graph should be recompiled when GCompileArgs have changed
     if (m_priv->m_lastMetas != in_metas)
@@ -117,7 +122,10 @@ void cv::GComputation::apply(GRunArgs &&ins, GRunArgsP &&outs, GCompileArgs &&ar
         }
         m_priv->m_lastMetas = in_metas;
     }
-    m_priv->m_lastCompiled(std::move(ins), std::move(outs));
+    profile("Run compiled", [&](){
+	m_priv->m_lastCompiled(std::move(ins), std::move(outs));
+      });
+  });
 }
 
 void cv::GComputation::apply(const std::vector<cv::gapi::own::Mat> &ins,

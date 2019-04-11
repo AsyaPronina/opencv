@@ -10,6 +10,19 @@
 
 #include <utility> // std::tuple
 
+// FIXME: Please delete me after you finish [DM]
+#include <chrono>
+#include <iostream>
+template <typename F>
+void profile(const std::string &s, F f) {
+  const auto start = std::chrono::high_resolution_clock::now();
+  f();
+  const auto d = std::chrono::high_resolution_clock::now() - start;
+  const auto ms = std::chrono::duration<double>(d).count() * 1000;
+  std::cout << "*** " << s << ": " << ms << "ms" << std::endl;
+}
+
+
 // \cond HIDDEN_SYMBOLS
 // This header file contains some generic utility functions which are
 // used in other G-API Public API headers.
