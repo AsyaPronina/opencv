@@ -1,5 +1,7 @@
 #include <opencv2/gapi/pattern_matching.hpp>
 
+//first - optimization.
+//second - adding functionality for multiple first nodes.
 std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
     using PatternGraph = cv::gimpl::GModel::Graph;
     using CompGraph = cv::gimpl::GModel::Graph;
@@ -8,7 +10,8 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
 
     using Matchings = std::vector<std::pair<ade::NodeHandle, ade::NodeHandle>>;
     using MatchingsVector = std::vector<Matchings>;
-    using VisitedMatchings = std::unordered_map<ade::Node*, ade::Node*>;
+    using VisitedMatchings = std::unordered_map<ade::NodeHandle, ade::NodeHandle>;
+    using VisitedMatchingsVector = std::vector<VisitedMatchings>;
 
     ade::NodeHandle firstPatternNode = patternGraph.metadata().get<ade::passes::TopologicalSortData>().nodes().front();
     // SO NOW ALGORITHM SUPPORTS ONLY GRAPHS WITH ONE INPUT NODE
@@ -25,18 +28,20 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
 
     // I can keep only this array fo tracking and no need in matchings arrays?
     // May be I can use this array and index for the whole algorithm
+    // So just insert in this map will be check for visited!
     VisitedMatchings matchedVisitedNodes;
-
+    VisitedMatchingsVector matchedVisitedNodesOpportunities;
+    
     class MatchFirstPatternNode {
     public:
         MatchFirstPatternNode(PatternGraph& patternGraph, CompGraph& compGraph, ade::NodeHandle firstPatternNode,
-                             MatchingsVector& matchings, VisitedMatchings& matchedVisitedNodes):
+                             MatchingsVector& matchings, VisitedMatchingsVector& matchedVisitedNodesOps):
             m_patternGraph(patternGraph),
             m_compGraph(compGraph),
             m_firstPatternNode(firstPatternNode),
             m_firstPatternNodeMetadata(m_patternGraph.metadata(m_firstPatternNode)),
             m_matchings(matchings),
-            m_matchedVisitedNodes(matchedVisitedNodes) {
+            m_matchedVisitedNodesOps(matchedVisitedNodesOps) {
 
         }
 
@@ -63,9 +68,8 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
 
             // Shall be handled more carefully - it shall contains nodes only for chosen first data node from array of matched first data nodes.
             // TODO: fix wrong usage
-            matchedVisitedNodes[m_firstPatternNode.get()] = node.get();
+            matchedVisitedNodes[m_firstPatternNode] = node;
 
-            std::vector<std::pair<ade::NodeHandle, ade::NodeHandle>> opNodesMatchings;
             for (auto patternIt = patternOutputNodes.begin(); patternIt != patternOutputNodes.end(); ++patternIt) {
                 auto matchedIt = std::find_if(compOutputNodes.begin(), compOutputNodes.end(), [this, &patternIt](const ade::NodeHandle& compNode) -> bool {
                     auto patternNodeMetadata = this->m_patternGraph.metadata(*patternIt);
@@ -96,12 +100,11 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
                     return false;
                 }
 
-                matchedVisitedNodes[(*patternIt).get()] = (*matchedIt).get();
-                opNodesMatchings.push_back({ *patternIt, *matchedIt });
+                matchedVisitedNodes[*patternIt] = *matchedIt;
             }
 
-            m_matchings.push_back(opNodesMatchings);
-            m_matchedVisitedNodes = matchedVisitedNodes;
+            m_matchedVisitedNodesOps.push_back(matchedVisitedNodes);
+
 
             return true;
        }
@@ -113,11 +116,11 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
         ade::NodeHandle m_firstPatternNode;
         Metadata m_firstPatternNodeMetadata;
         std::vector<std::vector<std::pair<ade::NodeHandle, ade::NodeHandle>>>& m_matchings;
-        VisitedMatchings& m_matchedVisitedNodes;
+        VisitedMatchingsVector& m_matchedVisitedNodesOps;
     };
 
     auto& compNodes = compGraph.metadata().get<ade::passes::TopologicalSortData>().nodes();
-    auto& possibleFirstDataNodes = ade::util::filter(compNodes, MatchFirstPatternNode(patternGraph, compGraph, firstPatternNode, matchings, matchedVisitedNodes));
+    auto& possibleFirstDataNodes = ade::util::filter(compNodes, MatchFirstPatternNode(patternGraph, compGraph, firstPatternNode, matchings, matchedVisitedNodesOpportunities));
 
     // To rethink
     // To support graphs with multiple input nodes:
@@ -160,9 +163,9 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
             return false;
         }
 
-        auto foundit = matchedVisitedNodes.find(first.get());
+        auto foundit = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(), [&first](ade::NodeHandle match) { return first.get() == match.get(); });
         if (foundit != matchedVisitedNodes.end()) {
-            if (second.get() != foundit->second) {
+            if (second.get() != foundit->second.get()) {
                 return false;
             }
 
@@ -186,12 +189,15 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
         bool isSearchFailed = false;
 
         // TODO: Switch to pointers
-        Matchings currentLevelMatchings(matchings[i]);
-        Matchings nextLevelMatchings{ };
+        matchedVisitedNodes = matchedVisitedNodesOpportunities[i];
+
+        //SWITCH FROM MAP TO VECTOR!!!! (DETERMINISTIC INSERT, RAI)
+
+        typename VisitedMatchings::iterator itBegin = matchedVisitedNodes.begin(), matchIt = itBegin;
+        std::size_t size = matchedVisitedNodes.size();
 
         while (nonStop) {
-            for (auto matchIt = currentLevelMatchings.begin(); matchIt != currentLevelMatchings.end() && !isSearchFailed; ++matchIt) {
-
+            for (std::size_t index = 0; index < size && !isSearchFailed && (++matchIt, true); ++index) {
                 subgraph.push_back(matchIt->second);
 
                 auto& patternOutputNodes = matchIt->first->outNodes();
@@ -202,7 +208,7 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
                     nonStop = false;
                     isSearchFailed = true;
                     subgraph.clear();
-                    // Clear the matchedVisitedNodes
+                    matchedVisitedNodes.clear();
                     break;
                 }
 
@@ -230,28 +236,26 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
                         nonStop = false;
                         isSearchFailed = true;
                         subgraph.clear();
-                        // Clear the matchedVisitedNodes
+                        matchedVisitedNodes.clear();
                         break;
                     }
 
-                    matchedVisitedNodes[(*patternIt).get()] = (*matchedIt).get();
-
                     //We shall not put in the matchings already visited nodes.
                     if (!isAlreadyVisited) {
-                        nextLevelMatchings.push_back({ *patternIt, *matchedIt });
+                        matchedVisitedNodes[*patternIt] = *matchedIt;
                     }
                 }
             }
 
             // 2. Secondly, update the matching array
             if (!isSearchFailed) {
-                if (nextLevelMatchings.size() == 0) {
+                if (std::distance(itEnd, matchedVisitedNodes.end()) == 0) {
                     // Subgraph is found
                         return subgraph;
                 }
 
-                currentLevelMatchings = nextLevelMatchings;
-                nextLevelMatchings.clear();
+                itBegin = matchIt;
+                itEnd = matchedVisitedNodes.end();
             }
         }
 
