@@ -8,8 +8,10 @@
 #ifndef OPENCV_GAPI_PATTERN_MATCHING_HPP
 #define OPENCV_GAPI_PATTERN_MATCHING_HPP
 
-#include <stack>
+#include <queue> //?
 #include <map>
+#include <functional> 
+#include <unordered_set>
 
 #include "opencv2/gapi/gcomputation.hpp"
 #include "opencv2/gapi/gcompiled.hpp"
@@ -28,7 +30,23 @@
 namespace cv {
 namespace gapi {
 
-    GAPI_EXPORTS std::list<ade::NodeHandle> findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph);
+    struct SubgraphMatch {
+        class NodeHandleHashFunction {
+        public:
+            size_t operator()(const ade::NodeHandle& nh) const
+            {
+                return std::hash<ade::Node*>()(nh.get());
+            }
+        };
+        std::unordered_map<ade::NodeHandle, ade::NodeHandle, NodeHandleHashFunction> inputDataNodesMatches;
+        std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> firstOpNodesMatches;
+        std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> lastOpNodesMatches;
+        std::unordered_map<ade::NodeHandle, ade::NodeHandle, NodeHandleHashFunction> outputDataNodesMatches;
+
+        std::list<ade::NodeHandle> internalLayers;
+    };
+
+    GAPI_EXPORTS SubgraphMatch findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph);
 
 } //namespace gapi
 } //namespace cv

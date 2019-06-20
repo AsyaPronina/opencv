@@ -1,139 +1,38 @@
 #include <opencv2/gapi/pattern_matching.hpp>
 
-//first - optimization.
-//second - adding functionality for multiple first nodes.
-std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
-    using PatternGraph = cv::gimpl::GModel::Graph;
-    using CompGraph = cv::gimpl::GModel::Graph;
+//first data nodes do not matter for us!!
+//only internal connections
 
-    using Metadata = typename PatternGraph::MetadataT;
+cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
+    using Graph = cv::gimpl::GModel::Graph;
+    using Metadata = typename Graph::MetadataT;
+    using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 
-    using Matchings = std::vector<std::pair<ade::NodeHandle, ade::NodeHandle>>;
-    using MatchingsVector = std::vector<Matchings>;
-    using VisitedMatchings = std::unordered_map<ade::NodeHandle, ade::NodeHandle>;
-    using VisitedMatchingsVector = std::vector<VisitedMatchings>;
+    //N^2 check if this graph may exist at all.
+    //find last pattern op nodes and stop at this point data graph search.
 
-    ade::NodeHandle firstPatternNode = patternGraph.metadata().get<ade::passes::TopologicalSortData>().nodes().front();
-    // SO NOW ALGORITHM SUPPORTS ONLY GRAPHS WITH ONE INPUT NODE
-    // To support graphs with multiple input nodes:
-    // Find first data nodes in pattern graph via checking of empty set of input edges.
-    // Get one of the found first data node and found match for it in computational graph via MatchFirstPatternNode
-    // Add in MatchFirstPatternNode registration in visited nodes.
+    std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> firstPatternOpNodes;
+    std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> lastPatternOpNodes;
 
-    MatchingsVector matchings;
+    auto firstPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().in_nhs;
+    auto lastPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().out_nhs;
+
+    for (auto node : firstPatternDataNodes) {
+        auto opNodes = node->outNodes();
+        firstPatternOpNodes.insert(opNodes.begin(), opNodes.end());
+    }
+
+    for (auto node : lastPatternDataNodes) {
+        auto opNodes = node->inNodes();
+        lastPatternOpNodes.insert(opNodes.begin(), opNodes.end());
+    }
 
     // For visited matchings to work correctly it is required that output nodes from some node found in both graphs were in the same order!
     // And that outNodes array contains these nodes right in the order that they are presented in graph (left-to-right nodes-exact).
     // Else graphs were not assumed to be equal.
-
-    // I can keep only this array fo tracking and no need in matchings arrays?
-    // May be I can use this array and index for the whole algorithm
-    // So just insert in this map will be check for visited!
     VisitedMatchings matchedVisitedNodes;
-    VisitedMatchingsVector matchedVisitedNodesOpportunities;
-    
-    class MatchFirstPatternNode {
-    public:
-        MatchFirstPatternNode(PatternGraph& patternGraph, CompGraph& compGraph, ade::NodeHandle firstPatternNode,
-                             MatchingsVector& matchings, VisitedMatchingsVector& matchedVisitedNodesOps):
-            m_patternGraph(patternGraph),
-            m_compGraph(compGraph),
-            m_firstPatternNode(firstPatternNode),
-            m_firstPatternNodeMetadata(m_patternGraph.metadata(m_firstPatternNode)),
-            m_matchings(matchings),
-            m_matchedVisitedNodesOps(matchedVisitedNodesOps) {
 
-        }
-
-        bool operator()(const ade::NodeHandle& node)
-        {
-            VisitedMatchings matchedVisitedNodes;
-
-            auto compNodeMetadata = m_compGraph.metadata(node);
-
-            if (compNodeMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
-                return false;
-            }
-
-            if (compNodeMetadata.get<cv::gimpl::Data>().shape != m_firstPatternNodeMetadata.get<cv::gimpl::Data>().shape) {
-                return false;
-            }
-
-            auto& patternOutputNodes = m_firstPatternNode->outNodes();
-            auto& compOutputNodes = node->outNodes();
-
-            if (patternOutputNodes.size() != compOutputNodes.size()) {
-                return false;
-            }
-
-            // Shall be handled more carefully - it shall contains nodes only for chosen first data node from array of matched first data nodes.
-            // TODO: fix wrong usage
-            matchedVisitedNodes[m_firstPatternNode] = node;
-
-            for (auto patternIt = patternOutputNodes.begin(); patternIt != patternOutputNodes.end(); ++patternIt) {
-                auto matchedIt = std::find_if(compOutputNodes.begin(), compOutputNodes.end(), [this, &patternIt](const ade::NodeHandle& compNode) -> bool {
-                    auto patternNodeMetadata = this->m_patternGraph.metadata(*patternIt);
-                    auto compNodeMetadata = this->m_compGraph.metadata(compNode);
-
-                    if (compNodeMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
-                        return false;
-                    }
-
-                    if (patternNodeMetadata.get<cv::gimpl::Op>().k.name != compNodeMetadata.get<cv::gimpl::Op>().k.name) {
-                        return false;
-                    }
-
-                    //ADD BACKEND_SPECIFIC LOGIC
-
-                    //if (!patternNodeMetadata.get<cv::gimpl::ActiveBackends>().backends.empty()) {
-                    //    //may be it shall be done for whole graph only
-                    //    std::unordered_set<cv::gapi::GBackend> patternNodeBackends = patternNodeMetadata.get<cv::gimpl::ActiveBackends>().backends;
-                    //    std::unordered_set<cv::gapi::GBackend> compNodeBackends = compNodeMetadata.get<cv::gimpl::ActiveBackends>().backends
-
-                    //    return false;
-                    //}
-
-                    return true;
-                });
-
-                if (matchedIt == compOutputNodes.end()) {
-                    return false;
-                }
-
-                matchedVisitedNodes[*patternIt] = *matchedIt;
-            }
-
-            m_matchedVisitedNodesOps.push_back(matchedVisitedNodes);
-
-
-            return true;
-       }
-
-    private:
-        PatternGraph & m_patternGraph;
-        CompGraph& m_compGraph;
-
-        ade::NodeHandle m_firstPatternNode;
-        Metadata m_firstPatternNodeMetadata;
-        std::vector<std::vector<std::pair<ade::NodeHandle, ade::NodeHandle>>>& m_matchings;
-        VisitedMatchingsVector& m_matchedVisitedNodesOps;
-    };
-
-    auto& compNodes = compGraph.metadata().get<ade::passes::TopologicalSortData>().nodes();
-    auto& possibleFirstDataNodes = ade::util::filter(compNodes, MatchFirstPatternNode(patternGraph, compGraph, firstPatternNode, matchings, matchedVisitedNodesOpportunities));
-
-    // To rethink
-    // To support graphs with multiple input nodes:
-    // Lets name array of first data nodes in patternGraph: firstPatternDataNodes and chosen one from this as firstPatternDataNode
-    // for (auto possibleFirstDataNode : possibleFirstDataNodes) {
-    //    auto nextFirstPatternDataNode = firstPatternDataNodes[1];
-    //  The sense is that that I need to match other data nodes: may be I shall do filter once more.
-    //  For example make filter on output op nodes from first data node to find op node which have the same input data nodes as in firstPatternDataNodes.
-    // The update matchings on first data nodes, and got for each data nodes to check if they are what we need.
-    // updates op nodes matching. If it fails, got to next possible first pattern data node and do the same.
-
-
-    auto dataNodesComparator = [](ade::NodeHandle first, Metadata firstMetadata, ade::NodeHandle second, Metadata secondMetadata) {
+    auto dataNodesComparator = [](std::pair<const ade::NodeHandle, std::vector<int>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<int>> second, Metadata secondMetadata) {
         if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
             std::logic_error("NodeType of passed node as second argument shall be NodeType::DATA!");
         }
@@ -142,8 +41,15 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
             return false;
         }
 
-        auto& firstOutputNodes = first->outNodes();
-        auto& secondOutputNodes = second->outNodes();
+        //todo
+        std::sort(first.second.begin(), first.second.end());
+        std::sort(second.second.begin(), second.second.end());
+        if (first.second != second.second) {
+            return false;
+        }
+
+        auto& firstOutputNodes = first.first->outNodes();
+        auto& secondOutputNodes = second.first->outNodes();
 
         if (firstOutputNodes.size() != secondOutputNodes.size()) {
             return false;
@@ -152,9 +58,10 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
         return true;
     };
 
-    auto opNodesComparator = [&matchedVisitedNodes](ade::NodeHandle first, Metadata firstMetadata, ade::NodeHandle second, Metadata secondMetadata, bool& isAlreadyVisited) {
+    auto opNodesComparator = [&matchedVisitedNodes](std::pair<const ade::NodeHandle, std::vector<int>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<int>> second, Metadata secondMetadata, bool& isAlreadyVisited) {
         if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
-            std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
+            //std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
+            return false;
         }
 
         // Assuming that if kernels names are the same then output DATA nodes counts from kernels are the same.
@@ -163,9 +70,25 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
             return false;
         }
 
-        auto foundit = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(), [&first](ade::NodeHandle match) { return first.get() == match.get(); });
+        //Extra for our case, because we can't create graph contained operation, which has multiple returns and all them are located in 1 variable (in 1 DATA node).
+        auto& firstOutputNodes = first.first->outNodes();
+        auto& secondOutputNodes = second.first->outNodes();
+
+        if (firstOutputNodes.size() != secondOutputNodes.size()) {
+            return false;
+        } // extra
+
+        //todo
+        std::sort(first.second.begin(), first.second.end());
+        std::sort(second.second.begin(), second.second.end());
+        if (first.second != second.second) {
+            return false;
+        }
+        ;
+        //shall be done another way.
+        auto foundit = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(), [&first](std::pair<ade::NodeHandle, ade::NodeHandle> match) { return first.first == match.first; });
         if (foundit != matchedVisitedNodes.end()) {
-            if (second.get() != foundit->second.get()) {
+            if (second.first != foundit->second) {
                 return false;
             }
 
@@ -175,92 +98,256 @@ std::list<ade::NodeHandle> cv::gapi::findMatches(cv::gimpl::GModel::Graph patter
         return true;
     };
 
-    std::list<ade::NodeHandle> subgraph;
+    std::unordered_map<ade::NodeHandle, std::vector<ade::NodeHandle>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> allMatchingsForFirstOpNodes;
 
+    auto compNodes = compGraph.nodes();
+    for (auto firstPatternOpNode : firstPatternOpNodes) {
+        std::vector<ade::NodeHandle> possibleMatchings;
+        std::copy_if(compNodes.begin(), compNodes.end(), std::back_inserter(possibleMatchings), [&firstPatternOpNode, &patternGraph, &compGraph, &opNodesComparator](const ade::NodeHandle& node) {
+            auto firstMetadata = patternGraph.metadata(firstPatternOpNode);
+            auto secondMetadata = compGraph.metadata(node);
+            bool stub = false;
+            /* TODO: FIXX */                               return opNodesComparator(std::make_pair(firstPatternOpNode, std::vector<int>{ 0 }), firstMetadata, std::make_pair(node, std::vector<int>{ 0 }), secondMetadata, stub);
+        });
+
+        allMatchingsForFirstOpNodes[firstPatternOpNode] = possibleMatchings;
+    }
+
+    std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> subgraphIns;
+    std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> subgraphOuts;
+    std::list<ade::NodeHandle> subgraphInternals;
+
+
+    // Structural matching first, semantic matching second.
+    bool notFound = true;
     int i = 0;
-    for (auto firstDataNode : possibleFirstDataNodes) {
-        // Fill the matchedVisitedNodes with new data node and nodes from matchings[i] here.
-        // Remove array fill in the code with first node search.
+    while (notFound && (i < allMatchingsForFirstOpNodes.size())) {
+        subgraphIns.clear();
+        subgraphOuts.clear();
+        subgraphInternals.clear();
+        matchedVisitedNodes.clear();
 
-        subgraph.push_back(firstDataNode);
+        int div = i;
+        for (auto allMatchingsForFirstOpNode : allMatchingsForFirstOpNodes) { //order is not determined: for ex., for last node. =( use ordered set and map to ensure order. 
+            auto size = allMatchingsForFirstOpNode.second.size();
+            int index = div % size;
+            div = div / size;
+            auto firstCompOpNode = allMatchingsForFirstOpNode.second[index];
+            matchedVisitedNodes.push_back({ allMatchingsForFirstOpNode.first, firstCompOpNode });
+            subgraphIns.push_back(matchedVisitedNodes.back());
+        }
 
-        //BFS
         bool nonStop = true;
         bool isSearchFailed = false;
 
-        // TODO: Switch to pointers
-        matchedVisitedNodes = matchedVisitedNodesOpportunities[i];
-
-        //SWITCH FROM MAP TO VECTOR!!!! (DETERMINISTIC INSERT, RAI)
-
-        typename VisitedMatchings::iterator itBegin = matchedVisitedNodes.begin(), matchIt = itBegin;
+        typename VisitedMatchings::iterator matchIt = matchedVisitedNodes.begin();
         std::size_t size = matchedVisitedNodes.size();
+        std::size_t index = 0;
 
         while (nonStop) {
-            for (std::size_t index = 0; index < size && !isSearchFailed && (++matchIt, true); ++index) {
-                subgraph.push_back(matchIt->second);
+            for (index; index < size && !isSearchFailed; ++index, ++matchIt) {
 
-                auto& patternOutputNodes = matchIt->first->outNodes();
-                auto& compOutputNodes = matchIt->second->outNodes();
-
-                // 1. Firstly, for every outputs find a matching 
-                if (patternOutputNodes.size() != compOutputNodes.size()) {
-                    nonStop = false;
-                    isSearchFailed = true;
-                    subgraph.clear();
-                    matchedVisitedNodes.clear();
-                    break;
+                auto foundIt = std::find(lastPatternOpNodes.begin(), lastPatternOpNodes.end(), matchIt->first);
+                if (foundIt != lastPatternOpNodes.end()) {
+                    subgraphOuts.push_back(*matchIt);
+                }
+                else {
+                    subgraphInternals.push_back(matchIt->second);
                 }
 
-                if (patternOutputNodes.size() == 0 && compOutputNodes.size() == 0) {
-                    continue;
+                std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> patternOutputNodesLabeled;
+                std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> compOutputNodesLabeled;
+
+                auto& patternOutputEdges = matchIt->first->outEdges();
+                auto& compOutputEdges = matchIt->second->outEdges();
+
+                auto addLabelToNode = [](ade::NodeHandle node, ade::EdgeHandle edge, const Graph& graph, std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& labeledNodes) {
+                    if (graph.metadata(node).get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
+                        labeledNodes[node].push_back(graph.metadata(edge).get<cv::gimpl::Input>().port);
+                    }
+                    else {
+                        labeledNodes[node].push_back(graph.metadata(edge).get<cv::gimpl::Output>().port);
+                    }
+                };
+
+                for (auto patternOutputEdge : patternOutputEdges) {
+                    if (patternOutputEdge->dstNode()->outEdges().size() != 0) {
+                        addLabelToNode(patternOutputEdge->dstNode(), patternOutputEdge, patternGraph, patternOutputNodesLabeled);
+                    }
                 }
 
-                for (auto patternIt = patternOutputNodes.begin(); patternIt != patternOutputNodes.end(); ++patternIt) {
+                for (auto compOutputEdge : compOutputEdges) {
+                    if (compOutputEdge->dstNode()->outEdges().size() != 0) {
+                        //Assuming that there is no case for the op node without output data nodes.
+                        addLabelToNode(compOutputEdge->dstNode(), compOutputEdge, compGraph, compOutputNodesLabeled);
+                    }
+                }
+
+                for (auto patternIt = patternOutputNodesLabeled.begin(); patternIt != patternOutputNodesLabeled.end(); ++patternIt) {
                     bool isAlreadyVisited = false;
 
-                    auto matchedIt = std::find_if(compOutputNodes.begin(), compOutputNodes.end(),
-                                     [&patternIt, &patternGraph, &compGraph, &dataNodesComparator, &opNodesComparator, &isAlreadyVisited] (const ade::NodeHandle& compNode) -> bool {
-                                         auto patternNodeMetadata = patternGraph.metadata(*patternIt);
-                                         auto compNodeMetadata = compGraph.metadata(compNode);
+                    auto matchedIt = std::find_if(compOutputNodesLabeled.begin(), compOutputNodesLabeled.end(),
+                        [&patternIt, &patternGraph, &compGraph, &dataNodesComparator, &opNodesComparator, &isAlreadyVisited](std::pair<const ade::NodeHandle, std::vector<int>>& compNode) -> bool {
+                        auto patternNodeMetadata = patternGraph.metadata(patternIt->first);
+                        auto compNodeMetadata = compGraph.metadata(compNode.first);
 
-                                         if (patternNodeMetadata.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::DATA) {
-                                             return dataNodesComparator(*patternIt, patternNodeMetadata, compNode, compNodeMetadata);
-                                         }
-                                         else {
-                                             return opNodesComparator(*patternIt, patternNodeMetadata, compNode, compNodeMetadata, isAlreadyVisited);
-                                         }
-                                     });
+                        if (patternNodeMetadata.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::DATA) {
+                            return dataNodesComparator(*patternIt, patternNodeMetadata, compNode, compNodeMetadata);
+                        }
+                        else {
+                            return opNodesComparator(*patternIt, patternNodeMetadata, compNode, compNodeMetadata, isAlreadyVisited);
+                        }
+                    });
 
-                    if (matchedIt == compOutputNodes.end()) {
+                    if (matchedIt == compOutputNodesLabeled.end()) {
                         nonStop = false;
                         isSearchFailed = true;
-                        subgraph.clear();
-                        matchedVisitedNodes.clear();
                         break;
                     }
 
                     //We shall not put in the matchings already visited nodes.
                     if (!isAlreadyVisited) {
-                        matchedVisitedNodes[*patternIt] = *matchedIt;
+                        matchedVisitedNodes.push_back({ patternIt->first, matchedIt->first });
                     }
                 }
             }
 
             // 2. Secondly, update the matching array
             if (!isSearchFailed) {
-                if (std::distance(itEnd, matchedVisitedNodes.end()) == 0) {
-                    // Subgraph is found
-                        return subgraph;
+                if (std::distance(matchIt, matchedVisitedNodes.end()) == 0) {
+                    //Found
+                    nonStop = false;
+                    notFound = false;
                 }
 
-                itBegin = matchIt;
-                itEnd = matchedVisitedNodes.end();
+                index = 0;
+                size = std::distance(matchIt, matchedVisitedNodes.end());
             }
         }
 
         ++i;
     }
 
-    return std::list<ade::NodeHandle>();
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> inputApiMatch(firstPatternDataNodes.size());
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> outputApiMatch(lastPatternDataNodes.size());
+
+    bool matched = true;
+
+    if (!notFound) {
+        VisitedMatchings matchedVisitedFirstDataNodes;
+        for (auto it = subgraphIns.begin(); it != subgraphIns.end() && matched; ++it) {
+            auto match = *it;
+            auto patternInputEdges = match.first->inEdges();
+            auto compInputEdges = match.second->inEdges();
+
+            if (match.first->inNodes().size() < match.second->inNodes().size()) {
+                matchedVisitedFirstDataNodes.clear();
+                inputApiMatch.clear();
+                matched = false;
+                break;
+            }
+
+            for (auto patternIt = patternInputEdges.begin(); patternIt != patternInputEdges.end(); ++patternIt) {
+
+                if ((*patternIt)->srcNode()->inEdges().size() != 0) {
+                    continue;
+                }
+
+                auto matchedIt = std::find_if(compInputEdges.begin(), compInputEdges.end(),
+                    [&patternIt, &patternGraph, &compGraph, &matchedVisitedFirstDataNodes](const ade::EdgeHandle& compEdge) -> bool {
+                    auto patternInputPort = patternGraph.metadata(*patternIt).get<cv::gimpl::Input>().port;
+                    auto compInputPort = compGraph.metadata(compEdge).get<cv::gimpl::Input>().port;
+
+                    if (patternInputPort != compInputPort) {
+                        return false;
+                    }
+
+                    auto foundit = std::find_if(matchedVisitedFirstDataNodes.begin(), matchedVisitedFirstDataNodes.end(), [&patternIt](std::pair<ade::NodeHandle, ade::NodeHandle> match) { return (*patternIt)->srcNode() == match.first; });
+                    if (foundit != matchedVisitedFirstDataNodes.end()) {
+                        if (compEdge->srcNode() != foundit->second) {
+                            return false;
+                        }
+                    }
+
+                    matchedVisitedFirstDataNodes.push_back({ (*patternIt)->srcNode(), compEdge->srcNode() });
+
+                    return true;
+                });
+
+                if (matchedIt == compInputEdges.end()) {
+                    matchedVisitedFirstDataNodes.clear();
+                    inputApiMatch.clear();
+                    matched = false;
+                    break;
+                }
+                inputApiMatch[(*patternIt)->srcNode()] = (*matchedIt)->srcNode();
+            }
+
+        }
+
+        if (matched) {
+            std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> visitedLastDataNodes;
+            for (auto it = subgraphOuts.begin(); it != subgraphOuts.end() && matched; ++it) {
+                auto match = *it;
+                auto patternOututEdges = match.first->outEdges();
+                auto compOutputEdges = match.second->outEdges();
+
+                if (match.first->outNodes().size() != match.second->outNodes().size()) {
+                    visitedLastDataNodes.clear();
+                    outputApiMatch.clear();
+                    matched = false;
+                    break;
+                }
+
+                for (auto patternIt = patternOututEdges.begin(); patternIt != patternOututEdges.end(); ++patternIt) {
+
+                    if ((*patternIt)->dstNode()->outEdges().size() != 0) {
+                        continue;
+                    }
+
+                    auto matchedIt = std::find_if(compOutputEdges.begin(), compOutputEdges.end(),
+                        [&patternIt, &patternGraph, &compGraph, &visitedLastDataNodes](const ade::EdgeHandle& compEdge) -> bool {
+                        auto patternInputPort = patternGraph.metadata(*patternIt).get<cv::gimpl::Output>().port;
+                        auto compInputPort = compGraph.metadata(compEdge).get<cv::gimpl::Output>().port;
+
+                        if (patternInputPort != compInputPort) {
+                            return false;
+                        }
+
+                        auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&patternIt](const ade::NodeHandle& match) { return (*patternIt)->dstNode() == match; });
+                        if (foundit != visitedLastDataNodes.end()) {
+                            return false;
+                        }
+
+                        visitedLastDataNodes.insert(compEdge->srcNode());
+
+                        return true;
+                    });
+
+                    if (matchedIt == compOutputEdges.end()) {
+                        visitedLastDataNodes.clear();
+                        outputApiMatch.clear();
+                        matched = false;
+                        break;
+                    }
+                    outputApiMatch[(*patternIt)->srcNode()] = (*matchedIt)->srcNode();
+                }
+
+            }
+        }
+    }
+
+    SubgraphMatch subgraph{};
+
+    if (notFound || !matched) {
+        return subgraph;
+    }
+
+    subgraph.inputDataNodesMatches = inputApiMatch;
+    subgraph.firstOpNodesMatches = subgraphIns;
+    subgraph.internalLayers = subgraphInternals;
+    subgraph.lastOpNodesMatches = subgraphOuts;
+    subgraph.outputDataNodesMatches = outputApiMatch;
+    
+    return subgraph;
 }
