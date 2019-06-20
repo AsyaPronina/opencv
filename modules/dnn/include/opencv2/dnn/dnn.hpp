@@ -44,9 +44,7 @@
 
 #include <vector>
 #include <opencv2/core.hpp>
-#ifdef CV_CXX11
-#include <future>
-#endif
+#include "opencv2/core/async.hpp"
 
 #include "../dnn/version.hpp"
 
@@ -59,18 +57,6 @@ CV__DNN_INLINE_NS_BEGIN
 //! @{
 
     typedef std::vector<int> MatShape;
-
-#if defined(CV_CXX11) || defined(CV_DOXYGEN)
-    typedef std::future<Mat> AsyncMat;
-#else
-    // Just a workaround for bindings.
-    struct AsyncMat
-    {
-        Mat get() { return Mat(); }
-        void wait() const {}
-        size_t wait_for(size_t milliseconds) const { CV_UNUSED(milliseconds); return -1; }
-    };
-#endif
 
     /**
      * @brief Enum of computation backends supported by layers.
@@ -479,7 +465,7 @@ CV__DNN_INLINE_NS_BEGIN
          *  This is an asynchronous version of forward(const String&).
          *  dnn::DNN_BACKEND_INFERENCE_ENGINE backend is required.
          */
-        CV_WRAP AsyncMat forwardAsync(const String& outputName = String());
+        CV_WRAP AsyncArray forwardAsync(const String& outputName = String());
 
         /** @brief Runs forward pass to compute output of layer with name @p outputName.
          *  @param outputBlobs contains all output blobs for specified layer.
@@ -816,6 +802,7 @@ CV__DNN_INLINE_NS_BEGIN
       *                  * `*.t7` | `*.net` (Torch, http://torch.ch/)
       *                  * `*.weights` (Darknet, https://pjreddie.com/darknet/)
       *                  * `*.bin` (DLDT, https://software.intel.com/openvino-toolkit)
+      *                  * `*.onnx` (ONNX, https://onnx.ai/)
       * @param[in] config Text file contains network configuration. It could be a
       *                   file with the following extensions:
       *                  * `*.prototxt` (Caffe, http://caffe.berkeleyvision.org/)
@@ -863,6 +850,23 @@ CV__DNN_INLINE_NS_BEGIN
      *  @returns Network object that ready to do forward, throw an exception in failure cases.
      */
     CV_EXPORTS_W Net readNetFromONNX(const String &onnxFile);
+
+    /** @brief Reads a network model from <a href="https://onnx.ai/">ONNX</a>
+     *         in-memory buffer.
+     *  @param buffer memory address of the first byte of the buffer.
+     *  @param sizeBuffer size of the buffer.
+     *  @returns Network object that ready to do forward, throw an exception
+     *        in failure cases.
+     */
+    CV_EXPORTS Net readNetFromONNX(const char* buffer, size_t sizeBuffer);
+
+    /** @brief Reads a network model from <a href="https://onnx.ai/">ONNX</a>
+     *         in-memory buffer.
+     *  @param buffer in-memory buffer that stores the ONNX model bytes.
+     *  @returns Network object that ready to do forward, throw an exception
+     *        in failure cases.
+     */
+    CV_EXPORTS_W Net readNetFromONNX(const std::vector<uchar>& buffer);
 
     /** @brief Creates blob from .pb file.
      *  @param path to the .pb file with input tensor.

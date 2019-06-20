@@ -755,8 +755,7 @@ int64 getTickCount(void)
     return (int64)mach_absolute_time();
 #else
     struct timeval tv;
-    struct timezone tz;
-    gettimeofday( &tv, &tz );
+    gettimeofday(&tv, NULL);
     return (int64)tv.tv_sec*1000000 + tv.tv_usec;
 #endif
 }
@@ -1195,7 +1194,7 @@ CV_IMPL const char* cvErrorStr( int status )
     case CV_BadDepth :               return "Input image depth is not supported by function";
     case CV_StsUnmatchedFormats :    return "Formats of input arguments do not match";
     case CV_StsUnmatchedSizes :      return "Sizes of input arguments do not match";
-    case CV_StsOutOfRange :          return "One of arguments\' values is out of range";
+    case CV_StsOutOfRange :          return "One of the arguments\' values is out of range";
     case CV_StsUnsupportedFormat :   return "Unsupported format or combination of formats";
     case CV_BadCOI :                 return "Input COI is not supported";
     case CV_BadNumChannels :         return "Bad number of channels";
