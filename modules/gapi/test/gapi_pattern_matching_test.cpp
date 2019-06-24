@@ -16,6 +16,8 @@
 #include "compiler/gcompiler.hpp"
 #include "compiler/passes/passes.hpp"
 
+#include "common/gapi_tests_common.hpp"
+
 #include "logger.hpp"
 
 
@@ -85,6 +87,9 @@ GAPI_OCV_KERNEL(OCVToNCHW, GToNCHW)
 {
     static void run(const cv::Mat& in, cv::Mat& out)
     {
+        cv::imshow("BGR for NCHW: ", in);
+        cv::waitKey();
+
         GAPI_Assert(out.depth() == in.depth());
         GAPI_Assert(out.channels() == 1);
         GAPI_Assert(in.channels() == 3);
@@ -96,6 +101,9 @@ GAPI_OCV_KERNEL(OCVToNCHW, GToNCHW)
             outs[i] = out(cv::Rect(0, i*in.rows, in.cols, in.rows));
         }
         cv::split(in, outs);
+
+        cv::imshow("out from kernel: ", out);
+        cv::waitKey();
     }
 };
 
@@ -117,6 +125,9 @@ GAPI_OCV_KERNEL(OCVResize3c3p, GResize3c3p)
 {
     static void run(const cv::Mat& in, cv::Size out_sz, int interp, cv::Mat& out)
     {
+        cv::imshow("bgr for resize kernel", in);
+        cv::waitKey();
+
         cv::Mat resized_mat;
         cv::resize(in, resized_mat, out_sz, 0, 0, interp);
 
@@ -125,10 +136,13 @@ GAPI_OCV_KERNEL(OCVResize3c3p, GResize3c3p)
             outs[i] = out(cv::Rect(0, i*out_sz.height, out_sz.width, out_sz.height));
         }
         cv::split(resized_mat, outs);
+
+        cv::imshow("out from resize kernel", out);
+        cv::waitKey();
     }
 };
-//To rename to retrieve firstAndLastOpNodes()
-static void retrieveApiNodes(cv::gimpl::GModel::Graph graph,
+
+static void retrieveUttermostOpNodes(cv::gimpl::GModel::Graph graph,
                              std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& firstOpNodes,
                              std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& lastOpNodes) {
 
@@ -336,9 +350,9 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
 
     cv::Size dstSize{ 224, 224 };
 
-    //----------------------------Pattern--------------------------------
-    cv::Mat patternIm(1920, 1080, CV_8UC3);
-    cv::Mat patternPlanarIm(1920, 1080 * 3, CV_8UC1);
+    //----------------------------Pattern graph---------------------------
+    cv::Mat patternIm(1080, 1920, CV_8UC3);
+    cv::Mat patternPlanarIm(1080 * 3, 1920, CV_8UC1);
     cv::randu(patternIm, cv::Scalar::all(0), cv::Scalar::all(255));
 
     cv::GMat patternIn;
@@ -349,10 +363,12 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     pattern.apply(cv::gin(patternIm), cv::gout(patternPlanarIm), cv::compile_args(pkg));
     //-------------------------------------------------------------------
 
-    //-------------------------input GComputation------------------------
-    cv::Mat testY(1920, 1080, CV_8UC1);
-    cv::Mat testUV(960, 540, CV_8UC2);
-    cv::Mat testPlanarIm(1920, 1080 * 3, CV_8UC1);
+    
+    //-------------------------Input GComputation graph------------------
+    cv::Mat testY(1080, 1920, CV_8UC1);
+    cv::Mat testUV(540, 960, CV_8UC2);
+    cv::Mat testPlanarIm(1080 * 3, 1920, CV_8UC1);
+
     cv::randu(testY, cv::Scalar::all(0), cv::Scalar::all(255));
     cv::randu(testUV, cv::Scalar::all(0), cv::Scalar::all(255));
 
@@ -361,18 +377,24 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     auto resized = cv::gapi::resize(converted, dstSize);
     auto split = toNCHW(resized);
 
+    // TO FIX: unique_ptr is a temporary hack to allow one resource to be shared between different GCompiler-s
     std::unique_ptr<cv::GComputation> computation = std::make_unique<cv::GComputation>(cv::GIn(y, uv), cv::GOut(split));
     computation->apply(cv::gin(testY, testUV), cv::gout(testPlanarIm), cv::compile_args(pkg));
     //--------------------------------------------------------------------
+    
 
-    //-----------------------pattern matching-----------------------------
-    cv::gapi::SubgraphMatch match = cv::gapi::findMatches(pattern.priv().m_lastCompiled.priv().model(), computation->priv().m_lastCompiled.priv().model());
+    //-----------------------Pattern Matching-----------------------------
+    auto patternGraph = pattern.priv().m_lastCompiled.priv().model();
+    auto compGraph = computation->priv().m_lastCompiled.priv().model();
+    cv::gapi::SubgraphMatch match = cv::gapi::findMatches(patternGraph, compGraph);
+    //--------------------------------------------------------------------
+    
 
     //----------------------Substitution graph----------------------------
     auto substitutePkg = cv::gapi::kernels<OCVResize3c3p>();
 
-    cv::Mat substituteIm(1920, 1080, CV_8UC3);
-    cv::Mat substitutePlanarIm(1920, 1080 * 3, CV_8UC1);
+    cv::Mat substituteIm(1080, 1920, CV_8UC3);
+    cv::Mat substitutePlanarIm(1080 * 3, 1920, CV_8UC1);
     cv::randu(substituteIm, cv::Scalar::all(0), cv::Scalar::all(255));
 
     cv::GMat substituteIn;
@@ -385,11 +407,10 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     //-------------------------Substitution---------------------------------
     auto substituteGraph = substitution.priv().m_lastCompiled.priv().model();
     std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> substitutionFirstOpNodes, substitutionLastOpNodes;
-    retrieveApiNodes(substituteGraph, substitutionFirstOpNodes, substitutionLastOpNodes);
+    retrieveUttermostOpNodes(substituteGraph, substitutionFirstOpNodes, substitutionLastOpNodes);
 
-    auto patternGraph = pattern.priv().m_lastCompiled.priv().model();
     std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> patternFirstOpNodes, patternLastOpNodes;
-    retrieveApiNodes(patternGraph, patternFirstOpNodes, patternLastOpNodes);
+    retrieveUttermostOpNodes(patternGraph, patternFirstOpNodes, patternLastOpNodes);
 
     assert(substitutionFirstOpNodes.size() == 1);
     assert(substitutionLastOpNodes.size() == 1);
@@ -414,6 +435,7 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     firstSubstituteOpNodesMatches[resizeOpNode] = resize3c3pOpNode;
     lastSubstituteOpNodesMatches[toNCHWOpNode] = resize3c3pOpNode;
 
+
     assert(resizeOpNode->inNodes().size() == 1);
     assert(toNCHWOpNode->outNodes().size() == 1);
 
@@ -429,25 +451,28 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     substituteMatch.lastOpNodesMatches = lastSubstituteOpNodesMatches;
     substituteMatch.outputDataNodesMatches = lastSubstituteDataNodesMatches;
 
-    auto compGraph = computation->priv().m_lastCompiled.priv().model();
     substituteMatches(patternGraph, compGraph, match, substituteGraph, substituteMatch);
+    //---------------------------------------------------------------
 
+
+    //----------------Substituted graph recompilation----------------
     std::unique_ptr<ade::Graph> adeGraphPtr(&compGraph.getGraph());
+    // TODO FIX: also for resource sharing
     std::unique_ptr<cv::gimpl::GCompiler> compiler = std::make_unique<cv::gimpl::GCompiler>(*computation, cv::descr_of(cv::gin(testY, testUV)), cv::compile_args(substitutePkg));
     compiler->runPasses(*adeGraphPtr);
     compiler->compileIslands(*adeGraphPtr);
     auto compiled = compiler->produceCompiled(std::move(adeGraphPtr));
+    //---------------------------------------------------------------
 
+    //------------------Substituted graph testing--------------------
     cv::Mat testPlanarImForFusedGraph;
     compiled(gin(testY, testUV), gout(testPlanarImForFusedGraph));
 
-    cv::Mat absDiff;
-    cv::absdiff(testPlanarIm, testPlanarImForFusedGraph, absDiff);
-    auto countNonZero = cv::countNonZero(absDiff);
+    EXPECT_TRUE(AbsSimilarPoints(0, 0.03)(testPlanarIm, testPlanarImForFusedGraph));
+    //--------------------------------------------------------------
 
-   // GTEST_ASSERT_EQ(cv::countNonZero(absDiff), 0);
 
-   //not to give graph to die..
+    // Leave memory leaks here to avoid crashes:)
     compiler.release();
     adeGraphPtr.release();
     computation.release();
