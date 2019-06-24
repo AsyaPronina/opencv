@@ -9,7 +9,6 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 
     //N^2 check if this graph may exist at all.
-    //find last pattern op nodes and stop at this point data graph search.
 
     std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> firstPatternOpNodes;
     std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> lastPatternOpNodes;
@@ -113,8 +112,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         allMatchingsForFirstOpNodes[firstPatternOpNode] = possibleMatchings;
     }
 
-    std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> subgraphIns;
-    std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> subgraphOuts;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> subgraphIns;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> subgraphOuts;
     std::list<ade::NodeHandle> subgraphInternals;
 
 
@@ -134,7 +133,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
             div = div / size;
             auto firstCompOpNode = allMatchingsForFirstOpNode.second[index];
             matchedVisitedNodes.push_back({ allMatchingsForFirstOpNode.first, firstCompOpNode });
-            subgraphIns.push_back(matchedVisitedNodes.back());
+            //subgraphIns.push_back(matchedVisitedNodes.back());
         }
 
         bool nonStop = true;
@@ -147,11 +146,17 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         while (nonStop) {
             for (index; index < size && !isSearchFailed; ++index, ++matchIt) {
 
-                auto foundIt = std::find(lastPatternOpNodes.begin(), lastPatternOpNodes.end(), matchIt->first);
-                if (foundIt != lastPatternOpNodes.end()) {
-                    subgraphOuts.push_back(*matchIt);
+                bool cond1 = true, cond2 = true;
+                auto lastFoundIt = std::find(lastPatternOpNodes.begin(), lastPatternOpNodes.end(), matchIt->first);
+                if (cond1 = (lastFoundIt != lastPatternOpNodes.end())) {
+                    subgraphOuts[matchIt->first] = matchIt->second;
                 }
-                else {
+                auto firstFoundIt = std::find(firstPatternOpNodes.begin(), firstPatternOpNodes.end(), matchIt->first);
+                if (cond2 = (firstFoundIt != firstPatternOpNodes.end())) {
+                    subgraphIns[matchIt->first] = matchIt->second;
+                }
+
+                if (!cond1 && !cond2) {
                     subgraphInternals.push_back(matchIt->second);
                 }
 
@@ -269,6 +274,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                         }
                     }
 
+                    //shall be map in this case as doesn't require iterations during modification
                     matchedVisitedFirstDataNodes.push_back({ (*patternIt)->srcNode(), compEdge->srcNode() });
 
                     return true;
@@ -330,7 +336,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                         matched = false;
                         break;
                     }
-                    outputApiMatch[(*patternIt)->srcNode()] = (*matchedIt)->srcNode();
+                    outputApiMatch[(*patternIt)->dstNode()] = (*matchedIt)->dstNode();
                 }
 
             }

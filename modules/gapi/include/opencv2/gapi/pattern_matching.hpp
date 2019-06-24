@@ -39,8 +39,8 @@ namespace gapi {
             }
         };
         std::unordered_map<ade::NodeHandle, ade::NodeHandle, NodeHandleHashFunction> inputDataNodesMatches;
-        std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> firstOpNodesMatches;
-        std::list<std::pair<ade::NodeHandle, ade::NodeHandle>> lastOpNodesMatches;
+        std::unordered_map<ade::NodeHandle, ade::NodeHandle, NodeHandleHashFunction> firstOpNodesMatches;
+        std::unordered_map<ade::NodeHandle, ade::NodeHandle, NodeHandleHashFunction> lastOpNodesMatches;
         std::unordered_map<ade::NodeHandle, ade::NodeHandle, NodeHandleHashFunction> outputDataNodesMatches;
 
         std::list<ade::NodeHandle> internalLayers;
