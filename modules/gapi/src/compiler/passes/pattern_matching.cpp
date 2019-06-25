@@ -1,4 +1,6 @@
-#include <opencv2/gapi/pattern_matching.hpp>
+#include <unordered_set>
+
+#include "pattern_matching.hpp"
 
 cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
     using Graph = cv::gimpl::GModel::Graph;
@@ -8,8 +10,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     //TODO: Possibly, we may add N^2 check whether this graph may match or not at all.
     //      Check that all pattern OP nodes exist in computational graph.
 
-    std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> firstPatternOpNodes;
-    std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> lastPatternOpNodes;
+    std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> firstPatternOpNodes;
+    std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> lastPatternOpNodes;
 
     auto firstPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().in_nhs;
     auto lastPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().out_nhs;
@@ -32,7 +34,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     auto dataNodesComparator = [](std::pair<const ade::NodeHandle, std::vector<int>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<int>> second, Metadata secondMetadata) {
         if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
             //TODO: FIX ASAP
-            std::logic_error("NodeType of passed node as second argument shall be NodeType::DATA!");
+            throw std::logic_error("NodeType of passed node as second argument shall be NodeType::DATA!");
         }
 
         if (firstMetadata.get<cv::gimpl::Data>().shape != secondMetadata.get<cv::gimpl::Data>().shape) {
@@ -58,7 +60,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
 
     auto opNodesComparator = [&matchedVisitedNodes](std::pair<const ade::NodeHandle, std::vector<int>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<int>> second, Metadata secondMetadata, bool& isAlreadyVisited) {
         if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
-            //std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
+            //throw std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
             //TODO: FIX ASAP
             return false;
         }
@@ -97,7 +99,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         return true;
     };
 
-    std::unordered_map<ade::NodeHandle, std::vector<ade::NodeHandle>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> allMatchingsForFirstOpNodes;
+    std::unordered_map<ade::NodeHandle, std::vector<ade::NodeHandle>, ade::HandleHasher<ade::Node>> allMatchingsForFirstOpNodes;
 
     auto compNodes = compGraph.nodes();
     for (auto firstPatternOpNode : firstPatternOpNodes) {
@@ -114,8 +116,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
 
     // Bad namings
     // TODO FIX: Use using
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> subgraphIns;
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> subgraphOuts;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> subgraphIns;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> subgraphOuts;
     std::list<ade::NodeHandle> subgraphInternals;
 
 
@@ -123,7 +125,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
 
     //TODO: found, think on naming
     bool notFound = true;
-    int i = 0;
+    std::size_t i = 0;
     while (notFound && (i < allMatchingsForFirstOpNodes.size())) {
         subgraphIns.clear();
         subgraphOuts.clear();
@@ -149,15 +151,15 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         std::size_t index = 0;
 
         while (nonStop) {
-            for (index; index < size && !isSearchFailed; ++index, ++matchIt) {
+            for (; index < size && !isSearchFailed; ++index, ++matchIt) {
 
                 bool cond1 = true, cond2 = true;
                 auto lastFoundIt = std::find(lastPatternOpNodes.begin(), lastPatternOpNodes.end(), matchIt->first);
-                if (cond1 = (lastFoundIt != lastPatternOpNodes.end())) {
+                if ((cond1 = (lastFoundIt != lastPatternOpNodes.end()))) {
                     subgraphOuts[matchIt->first] = matchIt->second;
                 }
                 auto firstFoundIt = std::find(firstPatternOpNodes.begin(), firstPatternOpNodes.end(), matchIt->first);
-                if (cond2 = (firstFoundIt != firstPatternOpNodes.end())) {
+                if ((cond2 = (firstFoundIt != firstPatternOpNodes.end()))) {
                     subgraphIns[matchIt->first] = matchIt->second;
                 }
 
@@ -165,13 +167,13 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                     subgraphInternals.push_back(matchIt->second);
                 }
 
-                std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> patternOutputNodesLabeled;
-                std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> compOutputNodesLabeled;
+                std::unordered_map<ade::NodeHandle, std::vector<int>, ade::HandleHasher<ade::Node>> patternOutputNodesLabeled;
+                std::unordered_map<ade::NodeHandle, std::vector<int>, ade::HandleHasher<ade::Node>> compOutputNodesLabeled;
 
                 auto patternOutputEdges = matchIt->first->outEdges();
                 auto compOutputEdges = matchIt->second->outEdges();
 
-                auto addLabelToNode = [](ade::NodeHandle node, ade::EdgeHandle edge, const Graph& graph, std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& labeledNodes) {
+                auto addLabelToNode = [](ade::NodeHandle node, ade::EdgeHandle edge, const Graph& graph, std::unordered_map<ade::NodeHandle, std::vector<int>, ade::HandleHasher<ade::Node>>& labeledNodes) {
                     if (graph.metadata(node).get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
                         labeledNodes[node].push_back(graph.metadata(edge).get<cv::gimpl::Input>().port);
                     }
@@ -240,8 +242,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         ++i;
     }
 
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> inputApiMatch(firstPatternDataNodes.size());
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> outputApiMatch(lastPatternDataNodes.size());
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> inputApiMatch(firstPatternDataNodes.size());
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> outputApiMatch(lastPatternDataNodes.size());
 
     bool matched = true;
 
@@ -274,7 +276,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                         return false;
                     }
 
-                    auto foundit = std::find_if(matchedVisitedFirstDataNodes.begin(), matchedVisitedFirstDataNodes.end(), [&patternIt](std::pair<ade::NodeHandle, ade::NodeHandle> match) { return (*patternIt)->srcNode() == match.first; });
+                    auto foundit = std::find_if(matchedVisitedFirstDataNodes.begin(), matchedVisitedFirstDataNodes.end(), [&patternIt](std::pair<ade::NodeHandle, ade::NodeHandle> matchedNodes) { return (*patternIt)->srcNode() == matchedNodes.first; });
                     if (foundit != matchedVisitedFirstDataNodes.end()) {
                         if (compEdge->srcNode() != foundit->second) {
                             return false;
@@ -299,7 +301,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         }
 
         if (matched) {
-            std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> visitedLastDataNodes;
+            std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> visitedLastDataNodes;
             for (auto it = subgraphOuts.begin(); it != subgraphOuts.end() && matched; ++it) {
                 auto match = *it;
                 auto patternOututEdges = match.first->outEdges();
@@ -328,7 +330,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                         }
 
                         // Not sure that it is needed at all, we can't have such case with multiple outputs to 1 data node
-                        auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&compEdge](const ade::NodeHandle& match) { return compEdge->dstNode() == match; });
+                        auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&compEdge](const ade::NodeHandle& visitedNode) { return compEdge->dstNode() == visitedNode; });
                         if (foundit != visitedLastDataNodes.end()) {
                             return false;
                         }

@@ -5,21 +5,26 @@
 // Copyright (C) 2018 Intel Corporation
 
 
-#include "test_precomp.hpp"
+#include "../test_precomp.hpp"
 
 #include <stdexcept>
 
 #include <opencv2/gapi/imgproc.hpp>
-#include <opencv2/gapi/pattern_matching.hpp>
 #include <opencv2/gapi/gproto.hpp>
+#include <opencv2/gapi/gcomputation.hpp>
+#include <opencv2/gapi/gcompiled.hpp>
+#include <opencv2/gapi/gkernel.hpp>
 
+#include "api/gcomputation_priv.hpp"
+#include "compiler/gcompiled_priv.hpp"
 #include "compiler/gcompiler.hpp"
 #include "compiler/passes/passes.hpp"
 
-#include "common/gapi_tests_common.hpp"
+#include "compiler/passes/pattern_matching.hpp"
+
+#include "../common/gapi_tests_common.hpp"
 
 #include "logger.hpp"
-
 
 namespace opencv_test
 {
@@ -78,7 +83,7 @@ G_TYPED_KERNEL(GToNCHW, <GMatP(GMat)>, "test.toNCHW") {
     }
 };
 
-GMat toNCHW(const GMat& src)
+static GMat toNCHW(const GMat& src)
 {
     return GToNCHW::on(src);
 }
@@ -110,7 +115,7 @@ G_TYPED_KERNEL(GResize3c3p, <GMatP(GMat, Size, int)>, "test.resize3c3p") {
     }
 };
 
-GMat resize3c3p(const GMat& src, cv::Size size, int interp = 1)
+static GMat resize3c3p(const GMat& src, cv::Size size, int interp = 1)
 {
     return GResize3c3p::on(src, size, interp);
 }
@@ -131,8 +136,8 @@ GAPI_OCV_KERNEL(OCVResize3c3p, GResize3c3p)
 };
 
 static void retrieveUttermostOpNodes(cv::gimpl::GModel::Graph graph,
-                             std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& firstOpNodes,
-                             std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& lastOpNodes) {
+                             std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>>& firstOpNodes,
+                             std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>>& lastOpNodes) {
 
     auto firstDataNodes = graph.metadata().get<cv::gimpl::Protocol>().in_nhs;
     auto lastDataNodes = graph.metadata().get<cv::gimpl::Protocol>().out_nhs;
@@ -148,7 +153,7 @@ static void retrieveUttermostOpNodes(cv::gimpl::GModel::Graph graph,
     }
 }
 
-void substituteMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph, cv::gapi::SubgraphMatch subgraphMatch, cv::gimpl::GModel::Graph substGraph, cv::gapi::SubgraphMatch substituteMatch) {
+static void substituteMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph, cv::gapi::SubgraphMatch subgraphMatch, cv::gimpl::GModel::Graph substGraph, cv::gapi::SubgraphMatch substituteMatch) {
     auto compInputApiMatches = subgraphMatch.inputDataNodesMatches;
     auto substInputApiMatches = substituteMatch.inputDataNodesMatches;
     auto compFirstOpNodesMatches = subgraphMatch.firstOpNodesMatches;
@@ -181,14 +186,14 @@ void substituteMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel:
         const auto id = dstGraph.metadata().get<cv::gimpl::DataObjectCounter>().GetNewId(shape);
         GMetaArg meta;
         cv::gimpl::HostCtor ctor;
-        cv:gimpl::Data::Storage storage = cv::gimpl::Data::Storage::INTERNAL;
+        cv::gimpl::Data::Storage storage = cv::gimpl::Data::Storage::INTERNAL;
 
         dstGraph.metadata(twinDataNode).set(cv::gimpl::Data{ shape, id, meta, ctor, storage });
 
         return twinDataNode;
     };
 
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> substitutedNodesMatchings;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> substitutedNodesMatchings;
 
     // TODO: Support case below:
     // Two pattern Op nodes with multiple edges connected from two pattern Data nodes.(012 345 - pattern, 012 345 - data, 345 012 - subst)
@@ -394,10 +399,10 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
 
     //-------------------------Substitution---------------------------------
     auto substituteGraph = substitution.priv().m_lastCompiled.priv().model();
-    std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> substitutionFirstOpNodes, substitutionLastOpNodes;
+    std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> substitutionFirstOpNodes, substitutionLastOpNodes;
     retrieveUttermostOpNodes(substituteGraph, substitutionFirstOpNodes, substitutionLastOpNodes);
 
-    std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> patternFirstOpNodes, patternLastOpNodes;
+    std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> patternFirstOpNodes, patternLastOpNodes;
     retrieveUttermostOpNodes(patternGraph, patternFirstOpNodes, patternLastOpNodes);
 
     assert(substitutionFirstOpNodes.size() == 1);
@@ -414,11 +419,11 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     auto toNCHWOpNode = *patternLastOpNodes.begin();
     assert(patternGraph.metadata(toNCHWOpNode).get<cv::gimpl::Op>().k.name == "test.toNCHW");
 
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> firstSubstituteOpNodesMatches;
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> lastSubstituteOpNodesMatches;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> firstSubstituteOpNodesMatches;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> lastSubstituteOpNodesMatches;
 
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> firstSubstituteDataNodesMatches;
-    std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> lastSubstituteDataNodesMatches;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> firstSubstituteDataNodesMatches;
+    std::unordered_map<ade::NodeHandle, ade::NodeHandle, ade::HandleHasher<ade::Node>> lastSubstituteDataNodesMatches;
 
     firstSubstituteOpNodesMatches[resizeOpNode] = resize3c3pOpNode;
     lastSubstituteOpNodesMatches[toNCHWOpNode] = resize3c3pOpNode;
