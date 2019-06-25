@@ -8,10 +8,10 @@
 #ifndef OPENCV_GAPI_PATTERN_MATCHING_HPP
 #define OPENCV_GAPI_PATTERN_MATCHING_HPP
 
-#include <queue> //?
-#include <map>
 #include <functional> 
 #include <unordered_set>
+#include <unordered_map>
+#include <list>
 
 #include "opencv2/gapi/gcomputation.hpp"
 #include "opencv2/gapi/gcompiled.hpp"
@@ -31,8 +31,7 @@ namespace cv {
 namespace gapi {
 
     struct SubgraphMatch {
-        class NodeHandleHashFunction {
-        public:
+        struct NodeHandleHashFunction {
             size_t operator()(const ade::NodeHandle& nh) const
             {
                 return std::hash<ade::Node*>()(nh.get());

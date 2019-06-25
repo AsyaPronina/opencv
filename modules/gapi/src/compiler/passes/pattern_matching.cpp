@@ -1,8 +1,5 @@
 #include <opencv2/gapi/pattern_matching.hpp>
 
-//first data nodes do not matter for us!!
-//only internal connections
-
 cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
     using Graph = cv::gimpl::GModel::Graph;
     using Metadata = typename Graph::MetadataT;
@@ -313,19 +310,20 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
 
                     auto matchedIt = std::find_if(compOutputEdges.begin(), compOutputEdges.end(),
                         [&patternIt, &patternGraph, &compGraph, &visitedLastDataNodes](const ade::EdgeHandle& compEdge) -> bool {
-                        auto patternInputPort = patternGraph.metadata(*patternIt).get<cv::gimpl::Output>().port;
-                        auto compInputPort = compGraph.metadata(compEdge).get<cv::gimpl::Output>().port;
+                        auto patternOutputPort = patternGraph.metadata(*patternIt).get<cv::gimpl::Output>().port;
+                        auto compOutputPort = compGraph.metadata(compEdge).get<cv::gimpl::Output>().port;
 
-                        if (patternInputPort != compInputPort) {
+                        if (patternOutputPort != compOutputPort) {
                             return false;
                         }
 
-                        auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&patternIt](const ade::NodeHandle& match) { return (*patternIt)->dstNode() == match; });
+                        // Not sure that it is needed at all, we can't have such case with multiple outputs to 1 data node
+                        auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&compEdge](const ade::NodeHandle& match) { return compEdge->dstNode() == match; });
                         if (foundit != visitedLastDataNodes.end()) {
                             return false;
                         }
 
-                        visitedLastDataNodes.insert(compEdge->srcNode());
+                        visitedLastDataNodes.insert(compEdge->dstNode());
 
                         return true;
                     });
