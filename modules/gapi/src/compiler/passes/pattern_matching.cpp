@@ -5,7 +5,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     using Metadata = typename Graph::MetadataT;
     using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 
-    //N^2 check if this graph may exist at all.
+    //TODO: Possibly, we may add N^2 check whether this graph may match or not at all.
+    //      Check that all pattern OP nodes exist in computational graph.
 
     std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> firstPatternOpNodes;
     std::unordered_set<ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> lastPatternOpNodes;
@@ -30,6 +31,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
 
     auto dataNodesComparator = [](std::pair<const ade::NodeHandle, std::vector<int>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<int>> second, Metadata secondMetadata) {
         if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
+            //TODO: FIX ASAP
             std::logic_error("NodeType of passed node as second argument shall be NodeType::DATA!");
         }
 
@@ -57,6 +59,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     auto opNodesComparator = [&matchedVisitedNodes](std::pair<const ade::NodeHandle, std::vector<int>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<int>> second, Metadata secondMetadata, bool& isAlreadyVisited) {
         if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
             //std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
+            //TODO: FIX ASAP
             return false;
         }
 
@@ -66,13 +69,13 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
             return false;
         }
 
-        //Extra for our case, because we can't create graph contained operation, which has multiple returns and all them are located in 1 variable (in 1 DATA node).
+        // To eliminate case with 1 node mapped on multiple others of pattern Graph
         auto firstOutputNodes = first.first->outNodes();
         auto secondOutputNodes = second.first->outNodes();
 
         if (firstOutputNodes.size() != secondOutputNodes.size()) {
             return false;
-        } // extra
+        }
 
         //todo
         std::sort(first.second.begin(), first.second.end());
@@ -109,12 +112,16 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         allMatchingsForFirstOpNodes[firstPatternOpNode] = possibleMatchings;
     }
 
+    // Bad namings
+    // TODO FIX: Use using
     std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> subgraphIns;
     std::unordered_map<ade::NodeHandle, ade::NodeHandle, cv::gapi::SubgraphMatch::NodeHandleHashFunction> subgraphOuts;
     std::list<ade::NodeHandle> subgraphInternals;
 
 
     // Structural matching first, semantic matching second.
+
+    //TODO: found, think on naming
     bool notFound = true;
     int i = 0;
     while (notFound && (i < allMatchingsForFirstOpNodes.size())) {
@@ -133,6 +140,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
             //subgraphIns.push_back(matchedVisitedNodes.back());
         }
 
+        //think on naming (stop instead)
         bool nonStop = true;
         bool isSearchFailed = false;
 
@@ -168,18 +176,19 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                         labeledNodes[node].push_back(graph.metadata(edge).get<cv::gimpl::Input>().port);
                     }
                     else {
+                        //Ruslan: use 1 int instead of vector as for DATA node we can have only 1 input edge.
                         labeledNodes[node].push_back(graph.metadata(edge).get<cv::gimpl::Output>().port);
                     }
                 };
 
                 for (auto patternOutputEdge : patternOutputEdges) {
-                    if (patternOutputEdge->dstNode()->outEdges().size() != 0) {
+                    if (!patternOutputEdge->dstNode()->outEdges().empty()) {
                         addLabelToNode(patternOutputEdge->dstNode(), patternOutputEdge, patternGraph, patternOutputNodesLabeled);
                     }
                 }
 
                 for (auto compOutputEdge : compOutputEdges) {
-                    if (compOutputEdge->dstNode()->outEdges().size() != 0) {
+                    if (!compOutputEdge->dstNode()->outEdges().empty()) {
                         //Assuming that there is no case for the op node without output data nodes.
                         addLabelToNode(compOutputEdge->dstNode(), compOutputEdge, compGraph, compOutputNodesLabeled);
                     }
@@ -215,6 +224,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
             }
 
             // 2. Secondly, update the matching array
+            // Ruslan: no is
             if (!isSearchFailed) {
                 if (std::distance(matchIt, matchedVisitedNodes.end()) == 0) {
                     //Found

@@ -87,9 +87,6 @@ GAPI_OCV_KERNEL(OCVToNCHW, GToNCHW)
 {
     static void run(const cv::Mat& in, cv::Mat& out)
     {
-        cv::imshow("BGR for NCHW: ", in);
-        cv::waitKey();
-
         GAPI_Assert(out.depth() == in.depth());
         GAPI_Assert(out.channels() == 1);
         GAPI_Assert(in.channels() == 3);
@@ -101,9 +98,6 @@ GAPI_OCV_KERNEL(OCVToNCHW, GToNCHW)
             outs[i] = out(cv::Rect(0, i*in.rows, in.cols, in.rows));
         }
         cv::split(in, outs);
-
-        cv::imshow("out from kernel: ", out);
-        cv::waitKey();
     }
 };
 
@@ -116,7 +110,7 @@ G_TYPED_KERNEL(GResize3c3p, <GMatP(GMat, Size, int)>, "test.resize3c3p") {
     }
 };
 
-GMat resize3c3p(const GMat& src, cv::Size size, int interp = 0)
+GMat resize3c3p(const GMat& src, cv::Size size, int interp = 1)
 {
     return GResize3c3p::on(src, size, interp);
 }
@@ -125,9 +119,6 @@ GAPI_OCV_KERNEL(OCVResize3c3p, GResize3c3p)
 {
     static void run(const cv::Mat& in, cv::Size out_sz, int interp, cv::Mat& out)
     {
-        cv::imshow("bgr for resize kernel", in);
-        cv::waitKey();
-
         cv::Mat resized_mat;
         cv::resize(in, resized_mat, out_sz, 0, 0, interp);
 
@@ -136,9 +127,6 @@ GAPI_OCV_KERNEL(OCVResize3c3p, GResize3c3p)
             outs[i] = out(cv::Rect(0, i*out_sz.height, out_sz.width, out_sz.height));
         }
         cv::split(resized_mat, outs);
-
-        cv::imshow("out from resize kernel", out);
-        cv::waitKey();
     }
 };
 
@@ -486,9 +474,8 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     cv::Mat testPlanarImForFusedGraph;
     compiled(gin(testY, testUV), gout(testPlanarImForFusedGraph));
 
-    EXPECT_TRUE(AbsSimilarPoints(10, 0.03)(testPlanarIm, testPlanarImForFusedGraph));
+    EXPECT_TRUE(AbsExact()(testPlanarIm, testPlanarImForFusedGraph));
     //--------------------------------------------------------------
-
 
     // Leave memory leaks here to avoid crashes:)
     compiler.release();

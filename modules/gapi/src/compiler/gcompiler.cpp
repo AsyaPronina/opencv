@@ -77,7 +77,7 @@ namespace
         auto dump_info = cv::gimpl::getCompileArg<cv::graph_dump_path>(args);
         if (!dump_info.has_value())
         {
-            const char* path = "C:\\Users\\apronina\\Downloads\\graphviz-windows\\Graphviz\\bin\\graph.dot"/*std::getenv("GRAPH_DUMP_PATH")*/;
+            const char* path = std::getenv("GRAPH_DUMP_PATH");
             return path
                 ? cv::util::make_optional(std::string(path))
                 : cv::util::optional<std::string>();
