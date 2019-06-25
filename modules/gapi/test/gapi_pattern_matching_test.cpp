@@ -11,7 +11,7 @@
 
 #include <opencv2/gapi/imgproc.hpp>
 #include <opencv2/gapi/pattern_matching.hpp>
-#include <opencv2/gapi./gproto.hpp>
+#include <opencv2/gapi/gproto.hpp>
 
 #include "compiler/gcompiler.hpp"
 #include "compiler/passes/passes.hpp"
@@ -378,7 +378,7 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     auto split = toNCHW(resized);
 
     // TO FIX: unique_ptr is a temporary hack to allow one resource to be shared between different GCompiler-s
-    std::unique_ptr<cv::GComputation> computation = std::make_unique<cv::GComputation>(cv::GIn(y, uv), cv::GOut(split));
+    std::unique_ptr<cv::GComputation> computation(new cv::GComputation(cv::GIn(y, uv), cv::GOut(split)));
     computation->apply(cv::gin(testY, testUV), cv::gout(testPlanarIm), cv::compile_args(pkg));
     //--------------------------------------------------------------------
     
@@ -456,9 +456,27 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
 
 
     //----------------Substituted graph recompilation----------------
-    std::unique_ptr<ade::Graph> adeGraphPtr(&compGraph.getGraph());
+
+    //-------------------Only for review purpose---------------------
+    //---------------------Not production code-----------------------
+    //Temporary tricks before the code relocation to the required place.
+
+    //--------Bad and UB trick to call protected method:-------------
+    class AdeGraphTrick : public cv::gimpl::GModel::ConstGraph {
+    public:
+        using cv::gimpl::GModel::ConstGraph::getCGraph;
+    };
+
+    auto constCompGraph = static_cast<cv::gimpl::GModel::ConstGraph>(compGraph);
+    auto& constCompGraphRef = constCompGraph;
+
+    auto& constCompAdeGraph = static_cast<AdeGraphTrick &>(constCompGraphRef).getCGraph();
+    auto& compAdeGraph = const_cast<ade::Graph&>(constCompAdeGraph);
+    //------------------End of the Bad and UB trick.-----------------
+
+    std::unique_ptr<ade::Graph> adeGraphPtr(&compAdeGraph);
     // TODO FIX: also for resource sharing
-    std::unique_ptr<cv::gimpl::GCompiler> compiler = std::make_unique<cv::gimpl::GCompiler>(*computation, cv::descr_of(cv::gin(testY, testUV)), cv::compile_args(substitutePkg));
+    std::unique_ptr<cv::gimpl::GCompiler> compiler(new cv::gimpl::GCompiler(*computation, cv::descr_of(cv::gin(testY, testUV)), cv::compile_args(substitutePkg)));
     compiler->runPasses(*adeGraphPtr);
     compiler->compileIslands(*adeGraphPtr);
     auto compiled = compiler->produceCompiled(std::move(adeGraphPtr));
@@ -468,7 +486,7 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     cv::Mat testPlanarImForFusedGraph;
     compiled(gin(testY, testUV), gout(testPlanarImForFusedGraph));
 
-    EXPECT_TRUE(AbsSimilarPoints(0, 0.03)(testPlanarIm, testPlanarImForFusedGraph));
+    EXPECT_TRUE(AbsSimilarPoints(10, 0.03)(testPlanarIm, testPlanarImForFusedGraph));
     //--------------------------------------------------------------
 
 

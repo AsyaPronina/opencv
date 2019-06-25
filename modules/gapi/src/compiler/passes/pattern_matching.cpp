@@ -44,8 +44,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
             return false;
         }
 
-        auto& firstOutputNodes = first.first->outNodes();
-        auto& secondOutputNodes = second.first->outNodes();
+        auto firstOutputNodes = first.first->outNodes();
+        auto secondOutputNodes = second.first->outNodes();
 
         if (firstOutputNodes.size() != secondOutputNodes.size()) {
             return false;
@@ -67,8 +67,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         }
 
         //Extra for our case, because we can't create graph contained operation, which has multiple returns and all them are located in 1 variable (in 1 DATA node).
-        auto& firstOutputNodes = first.first->outNodes();
-        auto& secondOutputNodes = second.first->outNodes();
+        auto firstOutputNodes = first.first->outNodes();
+        auto secondOutputNodes = second.first->outNodes();
 
         if (firstOutputNodes.size() != secondOutputNodes.size()) {
             return false;
@@ -160,8 +160,8 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                 std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> patternOutputNodesLabeled;
                 std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction> compOutputNodesLabeled;
 
-                auto& patternOutputEdges = matchIt->first->outEdges();
-                auto& compOutputEdges = matchIt->second->outEdges();
+                auto patternOutputEdges = matchIt->first->outEdges();
+                auto compOutputEdges = matchIt->second->outEdges();
 
                 auto addLabelToNode = [](ade::NodeHandle node, ade::EdgeHandle edge, const Graph& graph, std::unordered_map<ade::NodeHandle, std::vector<int>, cv::gapi::SubgraphMatch::NodeHandleHashFunction>& labeledNodes) {
                     if (graph.metadata(node).get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
