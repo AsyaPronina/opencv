@@ -133,7 +133,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         matchedVisitedNodes.clear();
 
         int div = i;
-        for (auto allMatchingsForFirstOpNode : allMatchingsForFirstOpNodes) { //order is not determined: for ex., for last node. =( use ordered set and map to ensure order. 
+        for (auto allMatchingsForFirstOpNode : allMatchingsForFirstOpNodes) { //order is not determined: for ex., for last node. =( use ordered set and map to ensure order.
             auto size = allMatchingsForFirstOpNode.second.size();
             int index = div % size;
             div = div / size;
@@ -364,6 +364,6 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     subgraph.internalLayers = subgraphInternals;
     subgraph.lastOpNodesMatches = subgraphOuts;
     subgraph.outputDataNodesMatches = outputApiMatch;
-    
+
     return subgraph;
 }

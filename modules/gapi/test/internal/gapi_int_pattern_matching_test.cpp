@@ -41,8 +41,8 @@ namespace opencv_test
 
  //Test:
 //+------+
-//|      |  +------------------------------------------------------------------------+                     
-//| GMat |  |                                                                        | 
+//|      |  +------------------------------------------------------------------------+
+//| GMat |  |                                                                        |
 //+------+  |   XXXXXXXXXX     +------+    XXXXXXXXXX      +------+     XXXXXXXXXX   |  +------+
 //       +---->X          X    |      |   X          X     |      |    X          X  |  |      |
 //       +---->XNV12tToBGR+--->+ GMat +---X  Resize  X+--->+ GMat +--->X  toNCHW  X+--->+ GMat |
@@ -209,7 +209,7 @@ static void substituteMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::
         for (auto patternInNodeIt = patternInNodes.begin(); patternInNodeIt != patternInNodes.end(); ++patternInNodeIt) {
             auto patternInNode = *patternInNodeIt;
             auto compInNode = compInputApiMatches[patternInNode];
-            
+
             auto compInEdge = *std::find_if(compInNode->outEdges().begin(), compInNode->outEdges().end(), [&compOpNode](ade::EdgeHandle edge) {
                                                                                                             return edge->dstNode() == compOpNode;
                                                                                                           });
@@ -221,7 +221,7 @@ static void substituteMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::
                                                                                                             });
             auto inPort = substGraph.metadata(substInEdge).get<cv::gimpl::Input>().port;
 
-           
+
             auto newCompEdge = compGraph.link(compInNode, newCompOpNode);
             compGraph.metadata(newCompEdge).set(cv::gimpl::Input{ inPort });
 
@@ -356,7 +356,7 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     pattern.apply(cv::gin(patternIm), cv::gout(patternPlanarIm), cv::compile_args(pkg));
     //-------------------------------------------------------------------
 
-    
+
     //-------------------------Input GComputation graph------------------
     cv::Mat testY(1080, 1920, CV_8UC1);
     cv::Mat testUV(540, 960, CV_8UC2);
@@ -374,14 +374,14 @@ TEST(PatternMatching, PreprocPipeline1Fusion)
     std::unique_ptr<cv::GComputation> computation(new cv::GComputation(cv::GIn(y, uv), cv::GOut(split)));
     computation->apply(cv::gin(testY, testUV), cv::gout(testPlanarIm), cv::compile_args(pkg));
     //--------------------------------------------------------------------
-    
+
 
     //-----------------------Pattern Matching-----------------------------
     auto patternGraph = pattern.priv().m_lastCompiled.priv().model();
     auto compGraph = computation->priv().m_lastCompiled.priv().model();
     cv::gapi::SubgraphMatch match = cv::gapi::findMatches(patternGraph, compGraph);
     //--------------------------------------------------------------------
-    
+
 
     //----------------------Substitution graph----------------------------
     auto substitutePkg = cv::gapi::kernels<OCVResize3c3p>();
