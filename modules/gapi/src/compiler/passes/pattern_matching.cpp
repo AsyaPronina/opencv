@@ -1,3 +1,9 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
+//
+// Copyright (C) 2019 Intel Corporation
+
 #include <unordered_set>
 
 #include "pattern_matching.hpp"
@@ -68,6 +74,10 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         // Assuming that if kernels names are the same then output DATA nodes counts from kernels are the same.
         // Assuming that if kernels names are the same then input DATA nodes counts to kernels are the same.
         if (firstMetadata.get<cv::gimpl::Op>().k.name != secondMetadata.get<cv::gimpl::Op>().k.name) {
+            return false;
+        }
+
+        if (std::string(firstMetadata.get<cv::gimpl::Island>().name()) != std::string(secondMetadata.get<cv::gimpl::Island>().name())) {
             return false;
         }
 
@@ -286,6 +296,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                     }
 
                     //shall be map in this case as doesn't require iterations during modification
+                    //Get rid of it and use inputApiMatch
                     matchedVisitedFirstDataNodes.push_back({ (*patternIt)->srcNode(), compEdge->srcNode() });
 
                     return true;
@@ -331,6 +342,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
                             return false;
                         }
 
+                        // Get rid of this code
                         // Not sure that it is needed at all, we can't have such case with multiple outputs to 1 data node
                         auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&compEdge](const ade::NodeHandle& visitedNode) { return compEdge->dstNode() == visitedNode; });
                         if (foundit != visitedLastDataNodes.end()) {
