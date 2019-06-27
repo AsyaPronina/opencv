@@ -111,6 +111,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     };
 
     std::unordered_map<ade::NodeHandle, std::vector<ade::NodeHandle>, ade::HandleHasher<ade::Node>> allMatchingsForFirstOpNodes;
+    std::size_t possibleStartPointsCount = 1;
 
     auto compNodes = compGraph.nodes();
     for (auto firstPatternOpNode : firstPatternOpNodes) {
@@ -124,6 +125,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         });
 
         allMatchingsForFirstOpNodes[firstPatternOpNode] = possibleMatchings;
+        possibleStartPointsCount *= possibleMatchings.size();
     }
 
     // Bad namings
@@ -138,7 +140,7 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
     //TODO: found, think on naming
     bool notFound = true;
     std::size_t i = 0;
-    while (notFound && (i < allMatchingsForFirstOpNodes.size())) {
+    while (notFound && (i < possibleStartPointsCount)) {
         subgraphIns.clear();
         subgraphOuts.clear();
         subgraphInternals.clear();
