@@ -54,10 +54,10 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
             return false;
         }
 
-        auto firstOutputNodes = first.first->outNodes();
-        auto secondOutputNodes = second.first->outNodes();
+        auto firstOutputEdges = first.first->outEdges();
+        auto secondOutputEdges = second.first->outEdges();
 
-        if (firstOutputNodes.size() != secondOutputNodes.size()) {
+        if (firstOutputEdges.size() != secondOutputEdges.size()) {
             return false;
         }
 
