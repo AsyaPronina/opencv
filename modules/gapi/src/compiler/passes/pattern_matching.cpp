@@ -199,15 +199,13 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
 
                 for (auto patternOutputEdge : patternOutputEdges) {
                     if (!patternOutputEdge->dstNode()->outEdges().empty()) {
+                        //Assuming that there is no case for the op node without output data nodes.
                         addLabelToNode(patternOutputEdge->dstNode(), patternOutputEdge, patternGraph, patternOutputNodesLabeled);
                     }
                 }
 
                 for (auto compOutputEdge : compOutputEdges) {
-                    if (!compOutputEdge->dstNode()->outEdges().empty()) {
-                        //Assuming that there is no case for the op node without output data nodes.
-                        addLabelToNode(compOutputEdge->dstNode(), compOutputEdge, compGraph, compOutputNodesLabeled);
-                    }
+                         addLabelToNode(compOutputEdge->dstNode(), compOutputEdge, compGraph, compOutputNodesLabeled);
                 }
 
                 for (auto patternIt = patternOutputNodesLabeled.begin(); patternIt != patternOutputNodesLabeled.end(); ++patternIt) {
