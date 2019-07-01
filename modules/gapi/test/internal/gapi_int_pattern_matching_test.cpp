@@ -181,7 +181,7 @@ TEST(PatternMatching, TestSimple3)
     EXPECT_EQ(matching_test::V{out_nh}, match.protoOuts());
 }
 
-TEST(PatternMatching, DISABLED_TestMultiplePatternOuts)
+TEST(PatternMatching, TestMultiplePatternOuts)
 {
     // Pattern
     ade::Graph pg;
@@ -197,7 +197,7 @@ TEST(PatternMatching, DISABLED_TestMultiplePatternOuts)
     GMat in;
     GMat dx, dy;
     std::tie(dx, dy) = cv::gapi::SobelXY(in, -1, 1);
-    matching_test::initGModel(pg, cv::GIn(in), cv::GOut(dx, dy));
+    matching_test::initGModel(tg, cv::GIn(in), cv::GOut(dx, dy));
 
     // Pattern Matching
     cv::gimpl::GModel::Graph pgm(pg);
@@ -288,7 +288,7 @@ TEST(PatternMatching, TestPreproc)
         GMat b, g, r;
         std::tie(b, g, r) = cv::gapi::split3(tmp);
         matching_test::initGModel(pg, cv::GIn(in), cv::GOut(b, g, r));
-   }
+    }
 
     // Test
     ade::Graph tg;
@@ -297,7 +297,7 @@ TEST(PatternMatching, TestPreproc)
     GMat tmp = cv::gapi::resize(bgr, cv::Size{224, 224});
     GMat b, g, r;
     std::tie(b, g, r) = cv::gapi::split3(tmp);
-    matching_test::initGModel(pg, cv::GIn(y, uv), cv::GOut(b, g, r));
+    matching_test::initGModel(tg, cv::GIn(y, uv), cv::GOut(b, g, r));
 
     // Pattern Matching
     cv::gimpl::GModel::Graph pgm(pg);
