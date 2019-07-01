@@ -339,7 +339,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 }
 
                 index = 0;
-                size = std::distance(matchIt, matchedVisitedNodes.end());
+                size = static_cast<std::size_t>(std::distance(matchIt, matchedVisitedNodes.end()));
             }
         }
 
