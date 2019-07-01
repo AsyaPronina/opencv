@@ -95,7 +95,8 @@ namespace gimpl {
        }
     };
 
-    GAPI_EXPORTS SubgraphMatch findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph);
+    GAPI_EXPORTS SubgraphMatch findMatches(const cv::gimpl::GModel::Graph& patternGraph,
+                                           const cv::gimpl::GModel::Graph& compGraph);
 
 } //namespace gimpl
 } //namespace cv

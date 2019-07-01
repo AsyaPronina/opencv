@@ -8,16 +8,121 @@
 
 #include "pattern_matching.hpp"
 
-cv::gimpl::SubgraphMatch cv::gimpl::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
-    using Graph = cv::gimpl::GModel::Graph;
-    using Metadata = typename Graph::MetadataT;
-    using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
+namespace  {
+using Graph = cv::gimpl::GModel::Graph;
+using Metadata = typename Graph::CMetadataT;
+using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
+
+// Returns true if two DATA nodes are semantically and structurally identical:
+//  - both nodes have the same GShape
+//  - both nodes are produced by the same port numbers
+//  - both nodes have the same number of output edges
+//  (output edges' ports are not checked here)
+//
+// @param first - first node to compare
+// @param firstPorts - a single element vector with first DATA node's producer output port
+// @param firstMetadata - metadata of first
+// @param second - second node to compare
+// @param secondPorts - a single element vector with second DATA node's producer output port
+// @param secondMetadata - metadata of second
+bool dataNodesComparator(const ade::NodeHandle first, std::vector<std::size_t> firstPorts, Metadata firstMetadata,
+                         const ade::NodeHandle second, std::vector<std::size_t> secondPorts, Metadata secondMetadata) {
+    if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
+        //TODO: FIX ASAP
+        throw std::logic_error("NodeType of passed node as second argument shall be NodeType::DATA!");
+    }
+
+    if (firstMetadata.get<cv::gimpl::Data>().shape != secondMetadata.get<cv::gimpl::Data>().shape) {
+        return false;
+    }
+
+    //todo
+    std::sort(firstPorts.begin(), firstPorts.end());
+    std::sort(secondPorts.begin(), secondPorts.end());
+    if (firstPorts != secondPorts) {
+        return false;
+    }
+
+    auto firstOutputEdges = first->outEdges();
+    auto secondOutputEdges = second->outEdges();
+
+    if (firstOutputEdges.size() != secondOutputEdges.size()) {
+        return false;
+    }
+
+    return true;
+};
+
+// Returns true if two OP nodes semantically and structurally identical:
+//    - both nodes have the same kernel name
+//    - both nodes are produced by the same port numbers
+//    - if first node is visited then check that its pair is equal to second node
+
+// @param first - first node to compare
+// @param firstPorts - ports' vector of current connections between first node and an parent active DATA node
+// @param firstMetadata - metadata of first
+// @param second - second node to compare
+// @param secondPorts - ports' vector of current connections between second node and an parent active DATA node
+// @param secondMetadata - metadata of second
+// @param [out] isAlreadyVisited - set to true if first node was already visited
+bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
+                       const ade::NodeHandle first, std::vector<std::size_t> firstPorts, Metadata firstMetadata,
+                       const ade::NodeHandle second, std::vector<std::size_t> secondPorts, Metadata secondMetadata,
+                       bool& isAlreadyVisited) {
+    if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
+        //throw std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
+        //TODO: FIX ASAP
+        return false;
+    }
+
+    // Assuming that if kernels names are the same then output DATA nodes counts from kernels are the same.
+    // Assuming that if kernels names are the same then input DATA nodes counts to kernels are the same.
+    if (firstMetadata.get<cv::gimpl::Op>().k.name != secondMetadata.get<cv::gimpl::Op>().k.name) {
+        return false;
+    }
+
+//        // Extra for our case, because we can't create graph contained operation, which has multiple returns and all them are located in 1 variable (in 1 DATA node).
+//        auto firstOutputNodes = first->outNodes();
+//        auto secondOutputNodes = second->outNodes();
+
+//        if (firstOutputNodes.size() != secondOutputNodes.size()) {
+//            return false;
+//        }
+//        // extra
+
+    //todo
+    std::sort(firstPorts.begin(), firstPorts.end());
+    std::sort(secondPorts.begin(), secondPorts.end());
+    if (firstPorts != secondPorts) {
+        return false;
+    }
+    ;
+    //shall be done another way.
+    auto foundit = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(),
+                               [&first](std::pair<ade::NodeHandle, ade::NodeHandle> match)
+                               {return first == match.first; });
+    if (foundit != matchedVisitedNodes.end()) {
+        if (second != foundit->second) {
+            return false;
+        }
+
+        isAlreadyVisited = true;
+    }
+
+    return true;
+};
+}
+
+cv::gimpl::SubgraphMatch
+cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
+                       const cv::gimpl::GModel::Graph& compGraph) {
 
     //TODO: Possibly, we may add N^2 check whether this graph may match or not at all.
     //      Check that all pattern OP nodes exist in computational graph.
 
-    std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> firstPatternOpNodes;
-    std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> lastPatternOpNodes;
+    //---------------------------------------------------------------
+    // Identify operations which start and end our pattern
+    SubgraphMatch::S firstPatternOpNodes, lastPatternOpNodes;
 
     auto firstPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().in_nhs;
     auto lastPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().out_nhs;
@@ -37,87 +142,21 @@ cv::gimpl::SubgraphMatch cv::gimpl::findMatches(cv::gimpl::GModel::Graph pattern
     // Else graphs were not assumed to be equal.
     VisitedMatchings matchedVisitedNodes;
 
-    auto dataNodesComparator = [](std::pair<const ade::NodeHandle, std::vector<std::size_t>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<std::size_t>> second, Metadata secondMetadata) {
-        if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
-            //TODO: FIX ASAP
-            throw std::logic_error("NodeType of passed node as second argument shall be NodeType::DATA!");
-        }
-
-        if (firstMetadata.get<cv::gimpl::Data>().shape != secondMetadata.get<cv::gimpl::Data>().shape) {
-            return false;
-        }
-
-        //todo
-        std::sort(first.second.begin(), first.second.end());
-        std::sort(second.second.begin(), second.second.end());
-        if (first.second != second.second) {
-            return false;
-        }
-
-        auto firstOutputEdges = first.first->outEdges();
-        auto secondOutputEdges = second.first->outEdges();
-
-        if (firstOutputEdges.size() != secondOutputEdges.size()) {
-            return false;
-        }
-
-        return true;
-    };
-
-    auto opNodesComparator = [&matchedVisitedNodes](std::pair<const ade::NodeHandle, std::vector<std::size_t>> first, Metadata firstMetadata, std::pair<const ade::NodeHandle, std::vector<std::size_t>> second, Metadata secondMetadata, bool& isAlreadyVisited) {
-        if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
-            //throw std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
-            //TODO: FIX ASAP
-            return false;
-        }
-
-        // Assuming that if kernels names are the same then output DATA nodes counts from kernels are the same.
-        // Assuming that if kernels names are the same then input DATA nodes counts to kernels are the same.
-        if (firstMetadata.get<cv::gimpl::Op>().k.name != secondMetadata.get<cv::gimpl::Op>().k.name) {
-            return false;
-        }
-
-        // Extra for our case, because we can't create graph contained operation, which has multiple returns and all them are located in 1 variable (in 1 DATA node).
-        auto firstOutputNodes = first.first->outNodes();
-        auto secondOutputNodes = second.first->outNodes();
-
-        if (firstOutputNodes.size() != secondOutputNodes.size()) {
-            return false;
-        }
-        // extra
-
-        //todo
-        std::sort(first.second.begin(), first.second.end());
-        std::sort(second.second.begin(), second.second.end());
-        if (first.second != second.second) {
-            return false;
-        }
-        ;
-        //shall be done another way.
-        auto foundit = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(), [&first](std::pair<ade::NodeHandle, ade::NodeHandle> match) { return first.first == match.first; });
-        if (foundit != matchedVisitedNodes.end()) {
-            if (second.first != foundit->second) {
-                return false;
-            }
-
-            isAlreadyVisited = true;
-        }
-
-        return true;
-    };
-
     std::unordered_map<ade::NodeHandle, std::vector<ade::NodeHandle>, ade::HandleHasher<ade::Node>> allMatchingsForFirstOpNodes;
     std::size_t possibleStartPointsCount = 1;
 
     auto compNodes = compGraph.nodes();
     for (auto firstPatternOpNode : firstPatternOpNodes) {
         std::vector<ade::NodeHandle> possibleMatchings;
-        std::copy_if(compNodes.begin(), compNodes.end(), std::back_inserter(possibleMatchings), [&firstPatternOpNode, &patternGraph, &compGraph, &opNodesComparator](const ade::NodeHandle& node) {
+        std::copy_if(compNodes.begin(), compNodes.end(), std::back_inserter(possibleMatchings),
+            [&](const ade::NodeHandle& node) {
             auto firstMetadata = patternGraph.metadata(firstPatternOpNode);
             auto secondMetadata = compGraph.metadata(node);
             bool stub = false;
             /* TODO: FIXX */
-            return opNodesComparator(std::make_pair(firstPatternOpNode, std::vector<std::size_t>{ 0ul }), firstMetadata, std::make_pair(node, std::vector<std::size_t>{ 0ul }), secondMetadata, stub);
+            return opNodesComparator(matchedVisitedNodes,
+                                     firstPatternOpNode, std::vector<std::size_t>{ 0ul }, firstMetadata,
+                                     node, std::vector<std::size_t>{ 0ul }, secondMetadata, stub);
         });
 
         allMatchingsForFirstOpNodes[firstPatternOpNode] = possibleMatchings;
@@ -208,15 +247,19 @@ cv::gimpl::SubgraphMatch cv::gimpl::findMatches(cv::gimpl::GModel::Graph pattern
                     bool isAlreadyVisited = false;
 
                     auto matchedIt = std::find_if(compOutputNodesLabeled.begin(), compOutputNodesLabeled.end(),
-                        [&patternIt, &patternGraph, &compGraph, &dataNodesComparator, &opNodesComparator, &isAlreadyVisited](std::pair<const ade::NodeHandle, std::vector<std::size_t>>& compNode) -> bool {
+                        [&](std::pair<const ade::NodeHandle, std::vector<std::size_t>>& compNode) -> bool {
                         auto patternNodeMetadata = patternGraph.metadata(patternIt->first);
                         auto compNodeMetadata = compGraph.metadata(compNode.first);
 
                         if (patternNodeMetadata.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::DATA) {
-                            return dataNodesComparator(*patternIt, patternNodeMetadata, compNode, compNodeMetadata);
+                            return dataNodesComparator(patternIt->first, patternIt->second, patternNodeMetadata,
+                                                       compNode.first, compNode.second, compNodeMetadata);
                         }
                         else {
-                            return opNodesComparator(*patternIt, patternNodeMetadata, compNode, compNodeMetadata, isAlreadyVisited);
+                            return opNodesComparator(matchedVisitedNodes,
+                                                     patternIt->first, patternIt->second, patternNodeMetadata,
+                                                     compNode.first, compNode.second, compNodeMetadata,
+                                                     isAlreadyVisited);
                         }
                     });
 
