@@ -185,16 +185,24 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
     // For every starting pattern node there may be multiple matching candidates.
     auto testNodes = compGraph.nodes();
     for (auto firstPatternOpNode : firstPatternOpNodes) {
+        auto firstMetadata = patternGraph.metadata(firstPatternOpNode);
+
         std::vector<ade::NodeHandle> possibleMatchings;
         std::copy_if(testNodes.begin(), testNodes.end(), std::back_inserter(possibleMatchings),
             [&](const ade::NodeHandle& node) {
-            auto firstMetadata = patternGraph.metadata(firstPatternOpNode);
             auto secondMetadata = compGraph.metadata(node);
             bool stub = false;
             /* TODO: FIXX */
-            return opNodesComparator(matchedVisitedNodes,
-                                     firstPatternOpNode, {  }, firstMetadata,
-                                     node, {  }, secondMetadata, stub);
+
+            if (secondMetadata.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
+                return opNodesComparator(matchedVisitedNodes,
+                                         firstPatternOpNode, {  }, firstMetadata,
+                                         node, {  }, secondMetadata,
+                                         stub);
+            }
+            else {
+                return false;
+            }
         });
 
         possibleStartPointsCount *= possibleMatchings.size();
