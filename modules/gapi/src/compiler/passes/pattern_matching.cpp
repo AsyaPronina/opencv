@@ -8,7 +8,7 @@
 
 #include "pattern_matching.hpp"
 
-cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
+cv::gimpl::SubgraphMatch cv::gimpl::findMatches(cv::gimpl::GModel::Graph patternGraph, cv::gimpl::GModel::Graph compGraph) {
     using Graph = cv::gimpl::GModel::Graph;
     using Metadata = typename Graph::MetadataT;
     using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
@@ -74,10 +74,6 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         // Assuming that if kernels names are the same then output DATA nodes counts from kernels are the same.
         // Assuming that if kernels names are the same then input DATA nodes counts to kernels are the same.
         if (firstMetadata.get<cv::gimpl::Op>().k.name != secondMetadata.get<cv::gimpl::Op>().k.name) {
-            return false;
-        }
-
-        if (std::string(firstMetadata.get<cv::gimpl::Island>().name()) != std::string(secondMetadata.get<cv::gimpl::Island>().name())) {
             return false;
         }
 
@@ -373,11 +369,11 @@ cv::gapi::SubgraphMatch cv::gapi::findMatches(cv::gimpl::GModel::Graph patternGr
         return subgraph;
     }
 
-    subgraph.inputDataNodesMatches = inputApiMatch;
-    subgraph.firstOpNodesMatches = subgraphIns;
+    subgraph.inputDataNodes = inputApiMatch;
+    subgraph.startOpNodes = subgraphIns;
     subgraph.internalLayers = subgraphInternals;
-    subgraph.lastOpNodesMatches = subgraphOuts;
-    subgraph.outputDataNodesMatches = outputApiMatch;
+    subgraph.finishOpNodes = subgraphOuts;
+    subgraph.outputDataNodes = outputApiMatch;
 
     return subgraph;
 }
