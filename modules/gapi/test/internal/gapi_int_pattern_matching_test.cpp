@@ -26,7 +26,13 @@
 namespace opencv_test
 {
 
+namespace matching_test {
 namespace  {
+using V = std::vector<ade::NodeHandle>;
+using S =  std::unordered_set< ade::NodeHandle
+                             , ade::HandleHasher<ade::Node>
+                             >;
+
 void initGModel(ade::Graph& gr,
                 cv::GProtoInputArgs&& in,
                 cv::GProtoOutputArgs&& out) {
@@ -49,7 +55,9 @@ bool isConsumedBy(cv::gimpl::GModel::Graph gm, ade::NodeHandle data_nh, ade::Nod
 std::string opName(cv::gimpl::GModel::Graph gm, ade::NodeHandle op_nh) {
     return gm.metadata(op_nh).get<cv::gimpl::Op>().k.name;
 }
+
 }
+} // matching_test
 
 //FIXME: To switch from filter2d kernel (which shall be matched by params too) to another one
 TEST(PatternMatching, MatchChainInTheMiddle)
@@ -60,8 +68,7 @@ TEST(PatternMatching, MatchChainInTheMiddle)
         GMat in;
         GMat tmp = cv::gapi::filter2D(in, -1, {});
         GMat out = cv::gapi::filter2D(tmp, -1, {});
-
-        initGModel(pg, cv::GIn(in), cv::GOut(out));
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
    }
 
     // Test
@@ -71,8 +78,7 @@ TEST(PatternMatching, MatchChainInTheMiddle)
     GMat tmp2 = cv::gapi::filter2D(tmp1, -1, {});
     GMat tmp3 = cv::gapi::filter2D(tmp2, -1, {});
     GMat out = cv::gapi::dilate3x3(tmp3);
-
-    initGModel(tg, cv::GIn(in), cv::GOut(out));
+    matching_test::initGModel(tg, cv::GIn(in), cv::GOut(out));
 
     // Pattern Matching
     cv::gimpl::GModel::Graph pgm(pg);
@@ -82,7 +88,8 @@ TEST(PatternMatching, MatchChainInTheMiddle)
     // Inspecting results:
     EXPECT_TRUE(match.ok());
 
-    EXPECT_EQ(5u, match.nodes().size());
+    auto nodes = match.nodes();
+    EXPECT_EQ(5u, nodes.size());
 
     const auto tmp1_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp1);
     const auto tmp2_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp2);
@@ -90,31 +97,19 @@ TEST(PatternMatching, MatchChainInTheMiddle)
     const auto op1_nh = cv::gimpl::GModel::producerOf(tgm, tmp2_nh); // 1st filter2D
     const auto op2_nh = cv::gimpl::GModel::producerOf(tgm, tmp3_nh); // 2nd filter2D
 
-    auto nodes = match.nodes();
-    EXPECT_EQ(1u, nodes.count(tmp1_nh));
-    EXPECT_EQ(1u, nodes.count(tmp2_nh));
-    EXPECT_EQ(1u, nodes.count(tmp3_nh));
-    EXPECT_EQ(1u, nodes.count(op1_nh));
-    EXPECT_EQ(1u, nodes.count(op2_nh));
+    EXPECT_EQ(matching_test::S({tmp1_nh, tmp2_nh, tmp3_nh, op1_nh, op2_nh}), nodes);
 
-    EXPECT_EQ(cv::gapi::imgproc::GFilter2D::id(), opName(tgm, op1_nh));
-    EXPECT_EQ(cv::gapi::imgproc::GFilter2D::id(), opName(tgm, op2_nh));
+    EXPECT_EQ(cv::gapi::imgproc::GFilter2D::id(), matching_test::opName(tgm, op1_nh));
+    EXPECT_EQ(cv::gapi::imgproc::GFilter2D::id(), matching_test::opName(tgm, op2_nh));
 
     EXPECT_EQ(1u, tmp2_nh->outEdges().size());
-    EXPECT_TRUE(isConsumedBy(tgm, tmp1_nh, op1_nh));
-    EXPECT_TRUE(isConsumedBy(tgm, tmp2_nh, op2_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, tmp1_nh, op1_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, tmp2_nh, op2_nh));
 
-    auto start_ops = match.startOps();
-    EXPECT_EQ(1u, start_ops.size());
-    EXPECT_EQ(1u, start_ops.count(op1_nh));
-
-    auto finish_ops = match.finishOps();
-    EXPECT_EQ(1u, finish_ops.size());
-    EXPECT_EQ(1u, finish_ops.count(op2_nh));
-
-    using V = std::vector<ade::NodeHandle>;
-    EXPECT_EQ(V{ tmp1_nh }, match.protoIns());
-    EXPECT_EQ(V{ tmp3_nh }, match.protoOuts());
+    EXPECT_EQ(matching_test::S({op1_nh}), match.startOps());
+    EXPECT_EQ(matching_test::S({op2_nh}), match.finishOps());
+    EXPECT_EQ(matching_test::V{ tmp1_nh }, match.protoIns());
+    EXPECT_EQ(matching_test::V{ tmp3_nh }, match.protoOuts());
 }
 
 TEST(PatternMatching, CheckNoMatch)
@@ -126,7 +121,7 @@ TEST(PatternMatching, CheckNoMatch)
         GMat tmp = cv::gapi::filter2D(in, -1, {});
         GMat out = cv::gapi::filter2D(tmp, -1, {});
 
-        initGModel(pg, cv::GIn(in), cv::GOut(out));
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
    }
 
     // Test
@@ -136,7 +131,7 @@ TEST(PatternMatching, CheckNoMatch)
         GMat tmp1 = cv::gapi::erode3x3(in);
         GMat out = cv::gapi::dilate3x3(tmp1);
 
-        initGModel(tg, cv::GIn(in), cv::GOut(out));
+        matching_test::initGModel(tg, cv::GIn(in), cv::GOut(out));
     }
 
     // Pattern Matching

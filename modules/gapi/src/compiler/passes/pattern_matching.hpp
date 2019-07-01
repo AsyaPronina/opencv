@@ -21,7 +21,7 @@ namespace gimpl {
                                      , ade::NodeHandle              // Test graph node
                                      , ade::HandleHasher<ade::Node>
                                      >;
-        using S =  std::unordered_set< ade::NodeHandle              // Pattern graph node
+        using S =  std::unordered_set< ade::NodeHandle
                                      , ade::HandleHasher<ade::Node>
                                      >;
         M inputDataNodes;
