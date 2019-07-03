@@ -208,7 +208,7 @@ TEST(PatternMatching, TestMultiplePatternOuts)
     EXPECT_TRUE(match.ok());
 
     auto nodes = match.nodes();
-    EXPECT_EQ(4, nodes.size());
+    EXPECT_EQ(4u, nodes.size());
 
     const auto in_nh = cv::gimpl::GModel::dataNodeOf(tgm, in);
     const auto dx_nh = cv::gimpl::GModel::dataNodeOf(tgm, dx);
@@ -358,6 +358,17 @@ TEST(PatternMatching, CheckNoMatch)
 
     // Inspecting results:
     EXPECT_FALSE(match.ok());
+}
+
+TEST(PatternMatching, adeSmokeTest)
+{
+    ade::Graph g;
+    ade::NodeHandle src = g.createNode();
+    ade::NodeHandle dst = g.createNode();
+    g.link(src, dst);
+    g.link(src, dst);
+
+    EXPECT_EQ(2u, dst->inNodes().size());
 }
 
 } // namespace opencv_test
