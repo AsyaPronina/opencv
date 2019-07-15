@@ -442,6 +442,11 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
     }
 
+    std::vector<ade::NodeHandle> inputTestDataNodes;
+    for (auto inPatternNode : firstPatternDataNodes) {
+        inputTestDataNodes.push_back(inputApiMatch[inPatternNode]);
+    }
+
     if (matched) {
         std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> visitedLastDataNodes;
         for (auto it = subgraphEndOps.begin(); it != subgraphEndOps.end() && matched; ++it) {
@@ -495,6 +500,11 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         }
     }
 
+    std::vector<ade::NodeHandle> outputTestDataNodes;
+    for (auto outPatternNode : lastPatternDataNodes) {
+        outputTestDataNodes.push_back(outputApiMatch[outPatternNode]);
+    }
+
     SubgraphMatch subgraph{};
 
     if (!found || !matched) {
@@ -506,6 +516,9 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
     subgraph.internalLayers = subgraphInternals;
     subgraph.finishOpNodes = subgraphEndOps;
     subgraph.outputDataNodes = outputApiMatch;
+
+    subgraph.inputTestDataNodes = inputTestDataNodes;
+    subgraph.outputTestDataNodes = outputTestDataNodes;
 
     return subgraph;
 }

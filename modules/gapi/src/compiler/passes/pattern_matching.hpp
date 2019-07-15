@@ -29,20 +29,22 @@ namespace gimpl {
         M finishOpNodes;
         M outputDataNodes;
 
+        std::vector<ade::NodeHandle> inputTestDataNodes;
+        std::vector<ade::NodeHandle> outputTestDataNodes;
+
         std::list<ade::NodeHandle> internalLayers;
 
         bool ok() const {
             return    !inputDataNodes.empty() && !startOpNodes.empty()
-                   && !finishOpNodes.empty() && !outputDataNodes.empty();
+                   && !finishOpNodes.empty() && !outputDataNodes.empty()
+                   && !inputTestDataNodes.empty() && !outputTestDataNodes.empty();
 
         }
 
        S nodes() const {
            S allNodes {};
 
-           for (auto it = inputDataNodes.begin(); it != inputDataNodes.end(); ++it) {
-               allNodes.insert(it->second);
-           }
+           allNodes.insert(inputTestDataNodes.begin(), inputTestDataNodes.end());
 
            for (auto it = startOpNodes.begin(); it != startOpNodes.end(); ++it) {
                allNodes.insert(it->second);
@@ -52,9 +54,7 @@ namespace gimpl {
                allNodes.insert(it->second);
            }
 
-           for (auto it = outputDataNodes.begin(); it != outputDataNodes.end(); ++it) {
-               allNodes.insert(it->second);
-           }
+           allNodes.insert(outputTestDataNodes.begin(), outputTestDataNodes.end());
 
            allNodes.insert(internalLayers.begin(), internalLayers.end());
 
@@ -78,20 +78,12 @@ namespace gimpl {
        }
 
        std::vector<ade::NodeHandle> protoIns() {
-           std::vector<ade::NodeHandle> pIns;
-           for (auto inDataNode : inputDataNodes) {
-              pIns.push_back(inDataNode.second);
-           }
-           return pIns;
+           return inputTestDataNodes;
        }
 
 
        std::vector<ade::NodeHandle> protoOuts() {
-           std::vector<ade::NodeHandle> pOuts;
-           for (auto outDataNode : outputDataNodes) {
-              pOuts.push_back(outDataNode.second);
-           }
-           return pOuts;
+           return outputTestDataNodes;
        }
     };
 

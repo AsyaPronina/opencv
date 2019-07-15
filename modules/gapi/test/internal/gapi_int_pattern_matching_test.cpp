@@ -59,6 +59,52 @@ std::string opName(cv::gimpl::GModel::Graph gm, ade::NodeHandle op_nh) {
 }
 } // matching_test
 
+TEST(PatternMatching, TestFuncDoesNotChangeTestGraph)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat out = cv::gapi::bitwise_not(in);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in;
+    GMat out = cv::gapi::bitwise_not(in);
+    matching_test::initGModel(tg, cv::GIn(in), cv::GOut(out));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    cv::gimpl::SubgraphMatch::S nodes{ tgm.nodes().begin(), tgm.nodes().end() };
+
+    const auto in_nh = cv::gimpl::GModel::dataNodeOf(tgm, in);
+    const auto out_nh = cv::gimpl::GModel::dataNodeOf(tgm, out);
+
+    auto input_data_nhs = tgm.metadata().get<cv::gimpl::Protocol>().in_nhs;
+    auto output_data_nhs = tgm.metadata().get<cv::gimpl::Protocol>().out_nhs;
+
+    EXPECT_EQ(1u, input_data_nhs.size());
+    EXPECT_EQ(1u, output_data_nhs.size());
+    EXPECT_EQ(in_nh, *input_data_nhs.begin());
+    EXPECT_EQ(out_nh, *output_data_nhs.begin());
+    EXPECT_EQ(0u, in_nh->inEdges().size());
+    EXPECT_EQ(0u, out_nh->outEdges().size());
+    EXPECT_EQ(1u, in_nh->outEdges().size());
+    EXPECT_EQ(1u, out_nh->inEdges().size());
+
+    const auto op_nh = cv::gimpl::GModel::producerOf(tgm, out_nh); //bitwise_not
+    EXPECT_EQ(cv::gapi::core::GNot::id(), matching_test::opName(tgm, op_nh));
+    EXPECT_EQ(1u, op_nh->inEdges().size());
+        EXPECT_TRUE(matching_test::isConsumedBy(tgm, in_nh, op_nh));
+    EXPECT_EQ(1u, op_nh->outEdges().size());
+}
+
 TEST(PatternMatching, TestSimple1)
 {
     // Pattern
@@ -225,6 +271,133 @@ TEST(PatternMatching, TestMultiplePatternOuts)
     EXPECT_EQ(matching_test::V({dx_nh, dy_nh}), match.protoOuts());
 }
 
+TEST(PatternMatching, TestPreprocSplit3)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat tmp = cv::gapi::resize(in, cv::Size{224, 224});
+        GMat b, g, r;
+        std::tie(b, g, r) = cv::gapi::split3(tmp);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(b, g, r));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat y, uv;
+    GMat bgr = cv::gapi::NV12toBGR(y, uv);
+    GMat tmp = cv::gapi::resize(bgr, cv::Size{224, 224});
+    GMat b, g, r;
+    std::tie(b, g, r) = cv::gapi::split3(tmp);
+    matching_test::initGModel(tg, cv::GIn(y, uv), cv::GOut(b, g, r));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(7u, nodes.size());
+
+    const auto bgr_nh = cv::gimpl::GModel::dataNodeOf(tgm, bgr);
+    const auto tmp_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp);
+    const auto b_nh = cv::gimpl::GModel::dataNodeOf(tgm, b);
+    const auto g_nh = cv::gimpl::GModel::dataNodeOf(tgm, g);
+    const auto r_nh = cv::gimpl::GModel::dataNodeOf(tgm, r);
+
+    const auto op1_nh = cv::gimpl::GModel::producerOf(tgm, tmp_nh); // 1st resize
+    const auto op2_nh = cv::gimpl::GModel::producerOf(tgm, b_nh); // 2nd split3
+    EXPECT_EQ(op2_nh, cv::gimpl::GModel::producerOf(tgm, g_nh));
+    EXPECT_EQ(op2_nh, cv::gimpl::GModel::producerOf(tgm, r_nh));
+
+    EXPECT_EQ(matching_test::S({bgr_nh, tmp_nh,   b_nh,   g_nh,
+                                          r_nh, op1_nh, op2_nh}),
+              nodes);
+
+    EXPECT_EQ(cv::gapi::core::GResize::id(), matching_test::opName(tgm, op1_nh));
+    EXPECT_EQ(cv::gapi::core::GSplit3::id(), matching_test::opName(tgm, op2_nh));
+
+    EXPECT_EQ(1u, tmp_nh->outEdges().size());
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, bgr_nh, op1_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, tmp_nh, op2_nh));
+
+    EXPECT_EQ(matching_test::S{ op1_nh }, match.startOps());
+    EXPECT_EQ(matching_test::S{ op2_nh }, match.finishOps());
+    EXPECT_EQ(matching_test::V{ bgr_nh }, match.protoIns());
+    EXPECT_EQ(matching_test::V({ b_nh, g_nh, r_nh }), match.protoOuts());
+}
+
+G_TYPED_KERNEL(GToNCHW, <GMatP(GMat)>, "test.toNCHW") {
+    static GMatDesc outMeta(GMatDesc in) {
+        GAPI_Assert(in.depth == CV_8U);
+        GAPI_Assert(in.chan == 3);
+        GAPI_Assert(in.planar == false);
+        return in.asPlanar();
+    }
+};
+
+static GMat toNCHW(const GMat& src)
+{
+    return GToNCHW::on(src);
+}
+
+TEST(PatternMatching, TestPreprocToNCHW)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat tmp = cv::gapi::resize(in, cv::Size{224, 224});
+        GMat plr = toNCHW(tmp);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(plr));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat y, uv;
+    GMat bgr = cv::gapi::NV12toBGR(y, uv);
+    GMat tmp = cv::gapi::resize(bgr, cv::Size{224, 224});
+    GMat plr = toNCHW(tmp);
+    matching_test::initGModel(tg, cv::GIn(y, uv), cv::GOut(plr));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(5u, nodes.size());
+
+    const auto bgr_nh = cv::gimpl::GModel::dataNodeOf(tgm, bgr);
+    const auto tmp_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp);
+    const auto plr_nh = cv::gimpl::GModel::dataNodeOf(tgm, plr);
+
+    const auto op1_nh = cv::gimpl::GModel::producerOf(tgm, tmp_nh); // 1st resize
+    const auto op2_nh = cv::gimpl::GModel::producerOf(tgm, plr_nh); // 2nd toNCHW
+
+    EXPECT_EQ(matching_test::S({bgr_nh, tmp_nh, plr_nh, op1_nh, op2_nh}),
+              nodes);
+
+    EXPECT_EQ(cv::gapi::core::GResize::id(), matching_test::opName(tgm, op1_nh));
+    EXPECT_EQ(GToNCHW::id(), matching_test::opName(tgm, op2_nh));
+
+    EXPECT_EQ(1u, tmp_nh->outEdges().size());
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, bgr_nh, op1_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, tmp_nh, op2_nh));
+
+    EXPECT_EQ(matching_test::S{ op1_nh }, match.startOps());
+    EXPECT_EQ(matching_test::S{ op2_nh }, match.finishOps());
+    EXPECT_EQ(matching_test::V{ bgr_nh }, match.protoIns());
+    EXPECT_EQ(matching_test::V{ plr_nh }, match.protoOuts());
+}
+
 //FIXME: To switch from filter2d kernel (which shall be matched by params too) to another one
 TEST(PatternMatching, MatchChainInTheMiddle)
 {
@@ -278,26 +451,31 @@ TEST(PatternMatching, MatchChainInTheMiddle)
     EXPECT_EQ(matching_test::V{ tmp3_nh }, match.protoOuts());
 }
 
-TEST(PatternMatching, TestPreproc)
+TEST(PatternMatching, TestMultipleStartOps1)
 {
     // Pattern
     ade::Graph pg;
     {
-        GMat in;
-        GMat tmp = cv::gapi::resize(in, cv::Size{224, 224});
-        GMat b, g, r;
-        std::tie(b, g, r) = cv::gapi::split3(tmp);
-        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(b, g, r));
+        GMat in1, in2;
+        GMat er = cv::gapi::erode3x3(in1);
+        GMat dil = cv::gapi::dilate3x3(in2);
+        GMat out = cv::gapi::add(er, dil);
+        matching_test::initGModel(pg, cv::GIn(in1, in2), cv::GOut(out));
     }
 
     // Test
     ade::Graph tg;
-    GMat y, uv;
-    GMat bgr = cv::gapi::NV12toBGR(y, uv);
-    GMat tmp = cv::gapi::resize(bgr, cv::Size{224, 224});
-    GMat b, g, r;
-    std::tie(b, g, r) = cv::gapi::split3(tmp);
-    matching_test::initGModel(tg, cv::GIn(y, uv), cv::GOut(b, g, r));
+
+    GMat in1, in2, in3, in4, in5, in6;
+    GMat er1 = cv::gapi::erode3x3(in1);
+    GMat er2 = cv::gapi::erode3x3(in2);
+    GMat er3 = cv::gapi::erode3x3(in3);
+    GMat er4 = cv::gapi::erode3x3(in4);
+    GMat dil1 = cv::gapi::dilate3x3(in5);
+    GMat dil2 = cv::gapi::dilate3x3(in6);
+    GMat out1 = cv::gapi::add(er1, er2);
+    GMat out2 = cv::gapi::add(er3, dil2);
+    matching_test::initGModel(tg, cv::GIn(in1, in2, in3, in4, in5, in6), cv::GOut(out1, out2, er4, dil1));
 
     // Pattern Matching
     cv::gimpl::GModel::Graph pgm(pg);
@@ -307,28 +485,344 @@ TEST(PatternMatching, TestPreproc)
     // Inspecting results:
     EXPECT_TRUE(match.ok());
 
-//    auto nodes = match.nodes();
-//    EXPECT_EQ(5u, nodes.size());
+    auto nodes = match.nodes();
+    EXPECT_EQ(8u, nodes.size());
 
-//    const auto tmp1_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp1);
-//    const auto tmp2_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp2);
-//    const auto tmp3_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp3);
-//    const auto op1_nh = cv::gimpl::GModel::producerOf(tgm, tmp2_nh); // 1st filter2D
-//    const auto op2_nh = cv::gimpl::GModel::producerOf(tgm, tmp3_nh); // 2nd filter2D
+    const auto in3_nh = cv::gimpl::GModel::dataNodeOf(tgm, in3);
+    const auto in6_nh = cv::gimpl::GModel::dataNodeOf(tgm, in6);
+    const auto er3_nh = cv::gimpl::GModel::dataNodeOf(tgm, er3);
+    const auto dil2_nh = cv::gimpl::GModel::dataNodeOf(tgm, dil2);
+    const auto out2_nh = cv::gimpl::GModel::dataNodeOf(tgm, out2);
 
-//    EXPECT_EQ(matching_test::S({tmp1_nh, tmp2_nh, tmp3_nh, op1_nh, op2_nh}), nodes);
+    const auto er_op_nh = cv::gimpl::GModel::producerOf(tgm, er3_nh);
+    const auto dil_op_nh = cv::gimpl::GModel::producerOf(tgm, dil2_nh);
+    const auto add_op_nh = cv::gimpl::GModel::producerOf(tgm, out2_nh);
 
-//    EXPECT_EQ(cv::gapi::imgproc::GFilter2D::id(), matching_test::opName(tgm, op1_nh));
-//    EXPECT_EQ(cv::gapi::imgproc::GFilter2D::id(), matching_test::opName(tgm, op2_nh));
+    EXPECT_EQ(matching_test::S({in3_nh, in6_nh, er3_nh, dil2_nh, out2_nh,
+                                er_op_nh, dil_op_nh, add_op_nh}),
+              nodes);
 
-//    EXPECT_EQ(1u, tmp2_nh->outEdges().size());
-//    EXPECT_TRUE(matching_test::isConsumedBy(tgm, tmp1_nh, op1_nh));
-//    EXPECT_TRUE(matching_test::isConsumedBy(tgm, tmp2_nh, op2_nh));
+    EXPECT_EQ(cv::gapi::imgproc::GErode::id(), matching_test::opName(tgm, er_op_nh));
+    EXPECT_EQ(cv::gapi::imgproc::GDilate::id(), matching_test::opName(tgm, dil_op_nh));
+    EXPECT_EQ(cv::gapi::core::GAdd::id(), matching_test::opName(tgm, add_op_nh));
 
-//    EXPECT_EQ(matching_test::S({op1_nh}), match.startOps());
-//    EXPECT_EQ(matching_test::S({op2_nh}), match.finishOps());
-//    EXPECT_EQ(matching_test::V{ tmp1_nh }, match.protoIns());
-//    EXPECT_EQ(matching_test::V{ tmp3_nh }, match.protoOuts());
+    EXPECT_EQ(1u, er3_nh->outEdges().size());
+    EXPECT_EQ(1u, dil2_nh->outEdges().size());
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, in3_nh, er_op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, in6_nh, dil_op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, er3_nh, add_op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, dil2_nh, add_op_nh));
+
+    EXPECT_EQ(matching_test::S({ er_op_nh, dil_op_nh }), match.startOps());
+    EXPECT_EQ(matching_test::S{ add_op_nh }, match.finishOps());
+    EXPECT_EQ(matching_test::V({ in3_nh, in6_nh }), match.protoIns());
+    EXPECT_EQ(matching_test::V{ out2_nh }, match.protoOuts());
+}
+
+TEST(PatternMatching, TestMultipleStartOps2)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in1, in2;
+        GMat er = cv::gapi::erode3x3(in1);
+        GMat dil = cv::gapi::dilate3x3(in2);
+        GMat out = cv::gapi::add(er, dil);
+        matching_test::initGModel(pg, cv::GIn(in1, in2), cv::GOut(out));
+    }
+
+    // Test
+    ade::Graph tg;
+
+    GMat in1, in2;
+    GMat er = cv::gapi::erode3x3(in1);
+    GMat dil1 = cv::gapi::dilate3x3(in2);
+    GMat dil2 = cv::gapi::dilate3x3(dil1);
+    GMat out = cv::gapi::add(er, dil2);
+    matching_test::initGModel(tg, cv::GIn(in1, in2), cv::GOut(out));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(8u, nodes.size());
+
+    const auto in1_nh = cv::gimpl::GModel::dataNodeOf(tgm, in1);
+    const auto dil1_nh = cv::gimpl::GModel::dataNodeOf(tgm, dil1);
+    const auto er_nh = cv::gimpl::GModel::dataNodeOf(tgm, er);
+    const auto dil2_nh = cv::gimpl::GModel::dataNodeOf(tgm, dil2);
+    const auto out_nh = cv::gimpl::GModel::dataNodeOf(tgm, out);
+
+    const auto er_op_nh = cv::gimpl::GModel::producerOf(tgm, er_nh);
+    const auto dil_op_nh = cv::gimpl::GModel::producerOf(tgm, dil2_nh);
+    const auto add_op_nh = cv::gimpl::GModel::producerOf(tgm, out_nh);
+
+    EXPECT_EQ(matching_test::S({in1_nh, dil1_nh, er_nh, dil2_nh, out_nh,
+                                er_op_nh, dil_op_nh, add_op_nh}),
+              nodes);
+
+    EXPECT_EQ(cv::gapi::imgproc::GErode::id(), matching_test::opName(tgm, er_op_nh));
+    EXPECT_EQ(cv::gapi::imgproc::GDilate::id(), matching_test::opName(tgm, dil_op_nh));
+    EXPECT_EQ(cv::gapi::core::GAdd::id(), matching_test::opName(tgm, add_op_nh));
+
+    EXPECT_EQ(1u, er_nh->outEdges().size());
+    EXPECT_EQ(1u, dil2_nh->outEdges().size());
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, in1_nh, er_op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, dil1_nh, dil_op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, er_nh, add_op_nh));
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, dil2_nh, add_op_nh));
+
+    EXPECT_EQ(matching_test::S({ er_op_nh, dil_op_nh }), match.startOps());
+    EXPECT_EQ(matching_test::S{ add_op_nh }, match.finishOps());
+    EXPECT_EQ(matching_test::V({ in1_nh, dil1_nh }), match.protoIns());
+    EXPECT_EQ(matching_test::V{ out_nh }, match.protoOuts());
+}
+
+TEST(PatternMatching, TestInexactMatchOfInOutData)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat out = cv::gapi::dilate3x3(in);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in;
+    GMat out1 = cv::gapi::erode3x3(in);
+    GMat out2 = cv::gapi::boxFilter(in, -1, cv::Size(3, 3));
+    GMat tmp = cv::gapi::dilate3x3(in);
+    GScalar out3 = cv::gapi::sum(tmp);
+    GScalar out4 = cv::gapi::mean(tmp);
+    matching_test::initGModel(tg, cv::GIn(in), cv::GOut(out1, out2, out3, out4));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(3u, nodes.size());
+
+    const auto in_nh = cv::gimpl::GModel::dataNodeOf(tgm, in);
+    const auto tmp_nh = cv::gimpl::GModel::dataNodeOf(tgm, tmp);
+
+    const auto op_nh = cv::gimpl::GModel::producerOf(tgm, tmp_nh); // dilate3x3
+
+    EXPECT_EQ(matching_test::S({in_nh, tmp_nh, op_nh}),
+              nodes);
+
+    EXPECT_EQ(cv::gapi::imgproc::GDilate::id(), matching_test::opName(tgm, op_nh));
+
+    EXPECT_TRUE(matching_test::isConsumedBy(tgm, in_nh, op_nh));
+
+
+    EXPECT_EQ(matching_test::S{ op_nh }, match.startOps());
+    EXPECT_EQ(matching_test::S{ op_nh }, match.finishOps());
+    EXPECT_EQ(matching_test::V{ in_nh }, match.protoIns());
+    EXPECT_EQ(matching_test::V{ tmp_nh }, match.protoOuts());
+
+    EXPECT_GT(in_nh->outEdges().size(), 1u);
+    EXPECT_GT(tmp_nh->outEdges().size(), 1u);
+}
+
+//FIXME: The start ops matching shall be reworked to more smarter way.
+// Start ops matching shall get rid of non valid matchings sample,
+// where two identical start ops in the pattern refer to the only one in the test.
+TEST(PatternMatching, TestManySameStartOpsAndHinge)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in1, in2, in3;
+        GMat er1 = cv::gapi::erode3x3(in1);
+        GMat er2 = cv::gapi::erode3x3(in2);
+        GMat er3 = cv::gapi::erode3x3(in3);
+        GMat mrg = cv::gapi::merge3(er1, er2, er3);
+        matching_test::initGModel(pg, cv::GIn(in1, in2, in3), cv::GOut(mrg));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in1, in2, in3;
+    GMat er1 = cv::gapi::erode3x3(in1);
+    GMat er2 = cv::gapi::erode3x3(in2);
+    GMat er3 = cv::gapi::erode3x3(in3);
+    GMat mrg = cv::gapi::merge3(er1, er2, er3);
+    matching_test::initGModel(tg, cv::GIn(in1, in2, in3), cv::GOut(mrg));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(11u, nodes.size());
+    EXPECT_EQ(cv::gimpl::SubgraphMatch::S(tgm.nodes().begin(), tgm.nodes().end()),
+              nodes);
+}
+
+//FIXME: The start ops matching shall be reworked to more smarter way.
+// Start ops matching shall get rid of non valid matchings sample,
+// where two identical start ops in the pattern refer to the only one in the test.
+TEST(PatternMatching, TestManySameStartOpsAndHinge2)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in1, in2, in3;
+        GMat er1 = cv::gapi::erode3x3(in1);
+        GMat er2 = cv::gapi::erode3x3(in2);
+        GMat er3 = cv::gapi::erode3x3(in3);
+        GMat dil1 = cv::gapi::dilate3x3(er1);
+        GMat dil2 = cv::gapi::dilate3x3(er2);
+        GMat dil3 = cv::gapi::dilate3x3(er3);
+        GMat mrg = cv::gapi::merge3(dil1, dil2, dil3);
+        matching_test::initGModel(pg, cv::GIn(in1, in2, in3), cv::GOut(mrg));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in1, in2, in3;
+    GMat er1 = cv::gapi::erode3x3(in1);
+    GMat er2 = cv::gapi::erode3x3(in2);
+    GMat er3 = cv::gapi::erode3x3(in3);
+    GMat dil1 = cv::gapi::dilate3x3(er1);
+    GMat dil2 = cv::gapi::dilate3x3(er2);
+    GMat dil3 = cv::gapi::dilate3x3(er3);
+    GMat mrg = cv::gapi::merge3(dil1, dil2, dil3);
+    matching_test::initGModel(tg, cv::GIn(in1, in2, in3), cv::GOut(mrg));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(17u, nodes.size());
+    EXPECT_EQ(cv::gimpl::SubgraphMatch::S(tgm.nodes().begin(), tgm.nodes().end()),
+              nodes);
+}
+
+//FIXME: The start ops matching shall be reworked to more smarter way.
+// Start ops matching shall get rid of non valid matchings sample,
+// where two identical start ops in the pattern refer to the only one in the test.
+TEST(PatternMatching, TestTwoChainsOnTheHingeIsomorphism)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in1, in2;
+        GMat er1 = cv::gapi::erode3x3(in1);
+        GMat er2 = cv::gapi::erode3x3(in2);
+        GMat mdb = cv::gapi::medianBlur(er1, 3);
+        GMat gb = cv::gapi::gaussianBlur(er2, cv::Size(5, 5), 0.12);
+        GMat conc = cv::gapi::concatVert(mdb, gb);
+        matching_test::initGModel(pg, cv::GIn(in1, in2), cv::GOut(conc));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in1, in2;
+    GMat er1 = cv::gapi::erode3x3(in1);
+    GMat er2 = cv::gapi::erode3x3(in2);
+    GMat gb = cv::gapi::gaussianBlur(er1, cv::Size(5, 5), 0.12);
+    GMat mdb = cv::gapi::medianBlur(er2, 3);
+    GMat conc = cv::gapi::concatVert(mdb, gb);
+    matching_test::initGModel(tg, cv::GIn(in1, in2), cv::GOut(conc));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(12u, nodes.size());
+    EXPECT_EQ(cv::gimpl::SubgraphMatch::S(tgm.nodes().begin(), tgm.nodes().end()),
+              nodes);
+
+    const auto in1_nh = cv::gimpl::GModel::dataNodeOf(tgm, in1);
+    const auto in2_nh = cv::gimpl::GModel::dataNodeOf(tgm, in2);
+
+    EXPECT_EQ(matching_test::V({ in2_nh, in1_nh }), match.protoIns());
+}
+
+TEST(PatternMatching, TestPatternHasMoreInDataNodes)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in1, in2, in3;
+        GMat out = cv::gapi::merge3(in1, in2, in3);
+        matching_test::initGModel(pg, cv::GIn(in1, in2, in3), cv::GOut(out));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in;
+    GMat out = cv::gapi::merge3(in, in, in);
+    matching_test::initGModel(tg, cv::GIn(in), cv::GOut(out));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_TRUE(match.ok());
+
+    auto nodes = match.nodes();
+    EXPECT_EQ(3u, nodes.size());
+    EXPECT_EQ(cv::gimpl::SubgraphMatch::S(tgm.nodes().begin(), tgm.nodes().end()),
+              nodes);
+
+    const auto in_nh = cv::gimpl::GModel::dataNodeOf(tgm, in);
+
+    EXPECT_EQ(matching_test::V({ in_nh, in_nh, in_nh }), match.protoIns());
+}
+
+TEST(PatternMatching, TestPatternHasFewerInDataNodes)
+{
+    // Pattern
+    ade::Graph pg;
+    {
+        GMat in;
+        GMat out = cv::gapi::merge3(in, in, in);
+        matching_test::initGModel(pg, cv::GIn(in), cv::GOut(out));
+    }
+
+    // Test
+    ade::Graph tg;
+    GMat in1, in2, in3;
+    GMat out = cv::gapi::merge3(in1, in2, in3);
+    matching_test::initGModel(tg, cv::GIn(in1, in2, in3), cv::GOut(out));
+
+    // Pattern Matching
+    cv::gimpl::GModel::Graph pgm(pg);
+    cv::gimpl::GModel::Graph tgm(tg);
+    cv::gimpl::SubgraphMatch match = cv::gimpl::findMatches(pg, tg);
+
+    // Inspecting results:
+    EXPECT_FALSE(match.ok());
 }
 
 TEST(PatternMatching, CheckNoMatch)
