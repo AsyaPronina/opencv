@@ -330,10 +330,6 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 } // Loop traversed patternOutputNodesLabeled
             } // Loop traversed matchedVisitedNodes
 
-            
-            //Refactor loop above
-            //Fix the test
-
             // matchedVisitedNodes content before previous loop execution: x<-->y, x<-->y, x<-->y
             // After previous loop is over: the matchedVisitedNodes is extent with the next level of
             // matchings
@@ -353,162 +349,175 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
             }
         }
 
-        // Switch to the next combination of starting points
-        ++i;
-    }
-
-    if (!found){
-        // Graph not found.
-        return SubgraphMatch{};
-    }
-
-    SubgraphMatch::M inputApiMatch;
-    SubgraphMatch::M outputApiMatch;
-
-    bool matched = true;
-
-    VisitedMatchings matchedVisitedFirstDataNodes;
-
-    // Algorithm is not correct. It found match and then mathes data. But if data does not match then algorithm shall try next combination!!
-    // Fix it!!
-    // Add test for it!
-    // Traversing current result for starting OPs
-    for (auto&& match : subgraphStartOps) {
-        auto patternInputEdges = match.first->inEdges();
-        auto compInputEdges = match.second->inEdges();
-
-        SubgraphMatch::S patternInNodes(match.first->inNodes().begin(), match.first->inNodes().end());
-        SubgraphMatch::S testInNodes(match.second->inNodes().begin(), match.second->inNodes().end());
-
-        if (patternInNodes.size() < testInNodes.size()) {
-            return SubgraphMatch { };
+        if (!found){
+            // Pattern subgraph is not matched.
+            // Switch to the next combination of starting points
+            ++i;
+            continue;
         }
-        // Else, patternInNodes.size() > testInNodes.size() is considered as valid case.
-
-        // Match pattern input DATA nodes with boundary matched test DATA nodes.
-        for (auto patternInEdge : patternInputEdges) {
-
-            // Not all start OP nodes are located in the beginning of the pattern graph
-            // Start OP may have one input DATA node as an Protocol IN node and other in DATA nodes
-            // produced from another operations
-            if (!IS_STARTPOINT(patternInEdge->srcNode())) {
-                continue;
-            }
-
-            auto matchedIt = std::find_if(compInputEdges.begin(), compInputEdges.end(),
-                [&](const ade::EdgeHandle& compEdge) -> bool {
-                auto patternInputPort = patternGraph.metadata(patternInEdge).get<cv::gimpl::Input>().port;
-                auto compInputPort = testGraph.metadata(compEdge).get<cv::gimpl::Input>().port;
-
-                if (patternInputPort != compInputPort) {
-                    return false;
-                }
-
-                auto foundit = std::find_if(matchedVisitedFirstDataNodes.begin(), matchedVisitedFirstDataNodes.end(),
-                     [&](std::pair<ade::NodeHandle, ade::NodeHandle> matchedNodes)
-                     { return patternInEdge->srcNode() == matchedNodes.first; });
-
-                if (foundit != matchedVisitedFirstDataNodes.end()) {
-                    if (compEdge->srcNode() != foundit->second) {
-                        return false;
-                    }
-                }
-
-                //shall be map in this case as doesn't require iterations during modification
-                //Get rid of it and use inputApiMatch
-                matchedVisitedFirstDataNodes.push_back({ patternInEdge->srcNode(), compEdge->srcNode() });
-
-                return true;
-            });
-
-            if (matchedIt == compInputEdges.end()) {
+    
+        SubgraphMatch::M inputApiMatch;
+        SubgraphMatch::M outputApiMatch;
+    
+        VisitedMatchings matchedVisitedFirstDataNodes;
+    
+        // Algorithm is not correct. It found match and then mathes data. But if data does not match then algorithm shall try next combination!!
+        // Fix it!!
+        // Add test for it!
+        // Traversing current result for starting OPs
+        for (auto it = subgraphStartOps.begin(); it != subgraphStartOps.end() && found; ++it) {
+            auto match = *it;
+            auto patternInputEdges = match.first->inEdges();
+            auto compInputEdges = match.second->inEdges();
+    
+            SubgraphMatch::S patternInNodes(match.first->inNodes().begin(), match.first->inNodes().end());
+            SubgraphMatch::S testInNodes(match.second->inNodes().begin(), match.second->inNodes().end());
+    
+            if (patternInNodes.size() < testInNodes.size()) {
                 matchedVisitedFirstDataNodes.clear();
                 inputApiMatch.clear();
-                matched = false;
+                found = false;
                 break;
             }
-            inputApiMatch[patternInEdge->srcNode()] = (*matchedIt)->srcNode();
+            // Else, patternInNodes.size() > testInNodes.size() is considered as valid case.
+    
+            // Match pattern input DATA nodes with boundary matched test DATA nodes.
+            for (auto patternInEdge : patternInputEdges) {
+    
+                // Not all start OP nodes are located in the beginning of the pattern graph
+                // Start OP may have one input DATA node as an Protocol IN node and other in DATA nodes
+                // produced from another operations
+                if (!IS_STARTPOINT(patternInEdge->srcNode())) {
+                    continue;
+                }
+    
+                auto matchedIt = std::find_if(compInputEdges.begin(), compInputEdges.end(),
+                    [&](const ade::EdgeHandle& compEdge) -> bool {
+                    auto patternInputPort = patternGraph.metadata(patternInEdge).get<cv::gimpl::Input>().port;
+                    auto compInputPort = testGraph.metadata(compEdge).get<cv::gimpl::Input>().port;
+    
+                    if (patternInputPort != compInputPort) {
+                        return false;
+                    }
+    
+                    auto foundit = std::find_if(matchedVisitedFirstDataNodes.begin(), matchedVisitedFirstDataNodes.end(),
+                         [&](std::pair<ade::NodeHandle, ade::NodeHandle> matchedNodes)
+                         { return patternInEdge->srcNode() == matchedNodes.first; });
+    
+                    if (foundit != matchedVisitedFirstDataNodes.end()) {
+                        if (compEdge->srcNode() != foundit->second) {
+                            return false;
+                        }
+                    }
+    
+                    //shall be map in this case as doesn't require iterations during modification
+                    //Get rid of it and use inputApiMatch
+                    matchedVisitedFirstDataNodes.push_back({ patternInEdge->srcNode(), compEdge->srcNode() });
+    
+                    return true;
+                });
+    
+                if (matchedIt == compInputEdges.end()) {
+                    matchedVisitedFirstDataNodes.clear();
+                    inputApiMatch.clear();
+                    found  = false;
+                    break;
+                }
+                inputApiMatch[patternInEdge->srcNode()] = (*matchedIt)->srcNode();
+            }
+    
         }
-
-    }
-
-    std::vector<ade::NodeHandle> inputTestDataNodes;
-    for (auto inPatternNode : firstPatternDataNodes) {
-        inputTestDataNodes.push_back(inputApiMatch[inPatternNode]);
-    }
-
-    if (matched) {
+   
+        if (!found) {
+            // Pattern IN data are not matched.
+            // Switch to the next combination of starting points
+            ++i;
+            continue;
+        }
+ 
+        std::vector<ade::NodeHandle> inputTestDataNodes;
+        for (auto inPatternNode : firstPatternDataNodes) {
+            inputTestDataNodes.push_back(inputApiMatch[inPatternNode]);
+        }
+    
         std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> visitedLastDataNodes;
-        for (auto it = subgraphEndOps.begin(); it != subgraphEndOps.end() && matched; ++it) {
+        for (auto it = subgraphEndOps.begin(); it != subgraphEndOps.end() && found; ++it) {
             auto match = *it;
             auto patternOututEdges = match.first->outEdges();
             auto compOutputEdges = match.second->outEdges();
-
+    
             if (match.first->outNodes().size() != match.second->outNodes().size()) {
                 visitedLastDataNodes.clear();
                 outputApiMatch.clear();
-                matched = false;
+                found = false;
                 break;
             }
-
+    
             for (auto patternIt = patternOututEdges.begin(); patternIt != patternOututEdges.end(); ++patternIt) {
-
+    
                 if ((*patternIt)->dstNode()->outEdges().size() != 0) {
                     continue;
                 }
-
+    
                 auto matchedIt = std::find_if(compOutputEdges.begin(), compOutputEdges.end(),
                     [&patternIt, &patternGraph, &testGraph, &visitedLastDataNodes](const ade::EdgeHandle& compEdge) -> bool {
                     auto patternOutputPort = patternGraph.metadata(*patternIt).get<cv::gimpl::Output>().port;
                     auto compOutputPort = testGraph.metadata(compEdge).get<cv::gimpl::Output>().port;
-
+    
                     if (patternOutputPort != compOutputPort) {
                         return false;
                     }
-
+    
                     // Get rid of this code
                     // Not sure that it is needed at all, we can't have such case with multiple outputs to 1 data node
                     auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&compEdge](const ade::NodeHandle& visitedNode) { return compEdge->dstNode() == visitedNode; });
                     if (foundit != visitedLastDataNodes.end()) {
                         return false;
                     }
-
+    
                     visitedLastDataNodes.insert(compEdge->dstNode());
-
+    
                     return true;
                 });
-
+    
                 if (matchedIt == compOutputEdges.end()) {
                     visitedLastDataNodes.clear();
                     outputApiMatch.clear();
-                    matched = false;
+                    found  = false;
                     break;
                 }
                 outputApiMatch[(*patternIt)->dstNode()] = (*matchedIt)->dstNode();
             }
-
+    
         }
-    }
 
-    std::vector<ade::NodeHandle> outputTestDataNodes;
-    for (auto outPatternNode : lastPatternDataNodes) {
-        outputTestDataNodes.push_back(outputApiMatch[outPatternNode]);
-    }
+        // TODO: not sure if it is really needed.
+        if (!found) {
+            // Pattern OUT data are not matched.
+            // Switch to the next combination of starting points
+            ++i;
+            continue;
+        }
 
-    SubgraphMatch subgraph{};
-
-    if (!found || !matched) {
+        std::vector<ade::NodeHandle> outputTestDataNodes;
+        for (auto outPatternNode : lastPatternDataNodes) {
+            outputTestDataNodes.push_back(outputApiMatch[outPatternNode]);
+        }
+    
+        SubgraphMatch subgraph{};
+    
+        subgraph.inputDataNodes = inputApiMatch;
+        subgraph.startOpNodes = subgraphStartOps;
+        subgraph.internalLayers = subgraphInternals;
+        subgraph.finishOpNodes = subgraphEndOps;
+        subgraph.outputDataNodes = outputApiMatch;
+    
+        subgraph.inputTestDataNodes = inputTestDataNodes;
+        subgraph.outputTestDataNodes = outputTestDataNodes;
+    
         return subgraph;
+
     }
 
-    subgraph.inputDataNodes = inputApiMatch;
-    subgraph.startOpNodes = subgraphStartOps;
-    subgraph.internalLayers = subgraphInternals;
-    subgraph.finishOpNodes = subgraphEndOps;
-    subgraph.outputDataNodes = outputApiMatch;
-
-    subgraph.inputTestDataNodes = inputTestDataNodes;
-    subgraph.outputTestDataNodes = outputTestDataNodes;
-
-    return subgraph;
+    return SubgraphMatch { };
 }
