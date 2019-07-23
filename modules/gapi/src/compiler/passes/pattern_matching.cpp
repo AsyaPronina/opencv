@@ -58,6 +58,9 @@ bool dataNodesComparator(const ade::NodeHandle first, std::vector<std::size_t> f
         return false;
     }
 
+    // FIXME: Because of new changes which introduce existence of unused DATA nodes
+    // check that first and second nodes have the same type of DATA::Storage.
+
     return true;
 };
 
@@ -126,14 +129,19 @@ std::size_t labelOf (ade::NodeHandle node, // reader node
 };
 
 inline bool IS_STARTPOINT(const ade::NodeHandle& nh){
+    // FIXME: Because of new changes which introduce existence of unused DATA nodes
+    // Try to rely on the nh Data::Storage::INPUT
     return nh->inEdges().empty();
 }
 
 inline bool IS_ENDPOINT(const ade::NodeHandle& nh){
+    // FIXME: Because of new changes which introduce existence of unused DATA nodes
+    // Try to rely on the nh Data::Storage::OUTPUT
     return nh->outEdges().empty();
 }
 }
 
+// Routine relies on the logic that 1 DATA node may have only 1 input edge.
 cv::gimpl::SubgraphMatch
 cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                        const cv::gimpl::GModel::Graph& testGraph) {
@@ -439,71 +447,56 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
             continue;
         }
  
+        // Create vector with the correctly ordered IN data nodes in the test subgraph
         std::vector<ade::NodeHandle> inputTestDataNodes;
         for (auto inPatternNode : firstPatternDataNodes) {
             inputTestDataNodes.push_back(inputApiMatch[inPatternNode]);
         }
 
         // Traversing current result for ending OPs
-        std::unordered_set<ade::NodeHandle, ade::HandleHasher<ade::Node>> visitedLastDataNodes;
-        for (auto it = subgraphEndOps.begin(); it != subgraphEndOps.end() && found; ++it) {
-            auto match = *it;
+        // There is an assumption that if the pattern subgraph is matched, then
+        // OUT data nodes shall be definitely matched
+        for (auto match : subgraphEndOps) {
             auto patternOutputEdges = match.first->outEdges();
             auto testOutputEdges = match.second->outEdges();
     
-            if (match.first->outNodes().size() != match.second->outNodes().size()) {
-                visitedLastDataNodes.clear();
-                outputApiMatch.clear();
-                found = false;
-                break;
-            }
-    
-            for (auto patternIt = patternOutputEdges.begin(); patternIt != patternOutputEdges.end(); ++patternIt) {
-    
-                if ((*patternIt)->dstNode()->outEdges().size() != 0) {
+            GAPI_Assert(patternOutputEdges.size() == testOutputEdges.size()
+                        &&
+                        "Ending OP nodes are matched, so OPs' outputs count shall be the same!");
+
+            // Match pattern output DATA nodes with boundary matched test DATA nodes.
+            for (auto patternOutEdge : patternOutputEdges) {
+
+                // Not all end OP nodes are located in the ending of the pattern graph
+                // End OP node may have one output DATA node as an Protocol OUT node and other
+                // output DATA nodes as input for another operations
+                if (!IS_ENDPOINT(patternOutEdge->dstNode())) {
                     continue;
                 }
-    
+
+                auto patternOutputPort = patternGraph.metadata(patternOutEdge).get<cv::gimpl::Output>().port;
+
                 auto matchedIt = std::find_if(testOutputEdges.begin(), testOutputEdges.end(),
-                    [&patternIt, &patternGraph, &testGraph, &visitedLastDataNodes](const ade::EdgeHandle& compEdge) -> bool {
-                    auto patternOutputPort = patternGraph.metadata(*patternIt).get<cv::gimpl::Output>().port;
-                    auto compOutputPort = testGraph.metadata(compEdge).get<cv::gimpl::Output>().port;
+                    [&](const ade::EdgeHandle& testOutEdge) -> bool {
+                    auto testOutputPort = testGraph.metadata(testOutEdge).get<cv::gimpl::Output>().port;
     
-                    if (patternOutputPort != compOutputPort) {
+                    if (patternOutputPort != testOutputPort) {
                         return false;
                     }
-    
-                    // Get rid of this code
-                    // Not sure that it is needed at all, we can't have such case with multiple outputs to 1 data node
-                    auto foundit = std::find_if(visitedLastDataNodes.begin(), visitedLastDataNodes.end(), [&compEdge](const ade::NodeHandle& visitedNode) { return compEdge->dstNode() == visitedNode; });
-                    if (foundit != visitedLastDataNodes.end()) {
-                        return false;
-                    }
-    
-                    visitedLastDataNodes.insert(compEdge->dstNode());
-    
+
+                    outputApiMatch[patternOutEdge->dstNode()] = testOutEdge->dstNode();
                     return true;
                 });
-    
-                if (matchedIt == testOutputEdges.end()) {
-                    visitedLastDataNodes.clear();
-                    outputApiMatch.clear();
-                    found  = false;
-                    break;
-                }
-                outputApiMatch[(*patternIt)->dstNode()] = (*matchedIt)->dstNode();
+
+                GAPI_Assert(matchedIt != testOutputEdges.end()
+                            &&
+                            "There shall be a match for every OUT data node from ending OP node,"
+                            "if ending OP node matches");
             }
     
         }
 
-        // TODO: not sure if it is really needed.
-        if (!found) {
-            // Pattern OUT data nodes can not be matched.
-            // Switch to the next combination of starting points
-            ++i;
-            continue;
-        }
-
+        // Create vector with the correctly ordered OUT data nodes in the test subgraph
         std::vector<ade::NodeHandle> outputTestDataNodes;
         for (auto outPatternNode : lastPatternDataNodes) {
             outputTestDataNodes.push_back(outputApiMatch[outPatternNode]);
