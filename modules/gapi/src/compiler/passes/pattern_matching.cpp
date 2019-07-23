@@ -37,10 +37,10 @@ using L = std::unordered_map
 // @param second - second node to compare
 // @param secondPorts - a single element vector with second DATA node's producer output port
 // @param secondMetadata - metadata of second
-bool dataNodesComparator(const ade::NodeHandle first, std::vector<std::size_t> firstPorts,
-                         Metadata firstMetadata,
-                         const ade::NodeHandle second, std::vector<std::size_t> secondPorts,
-                         Metadata secondMetadata) {
+bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::size_t>& firstPorts,
+                         const Metadata& firstMetadata,
+                         const ade::NodeHandle& second, const std::vector<std::size_t>& secondPorts,
+                         const Metadata& secondMetadata) {
     if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
         throw std::logic_error("NodeType of passed node as second argument"
                                "shall be NodeType::DATA!");
@@ -86,10 +86,10 @@ bool dataNodesComparator(const ade::NodeHandle first, std::vector<std::size_t> f
 // @param secondMetadata - metadata of second
 // @param [out] isAlreadyVisited - set to true if first and second nodes have been already visited
 bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
-                       const ade::NodeHandle first, std::vector<std::size_t> firstPorts,
-                       Metadata firstMetadata,
-                       const ade::NodeHandle second, std::vector<std::size_t> secondPorts,
-                       Metadata secondMetadata,
+                       const ade::NodeHandle& first, std::vector<std::size_t> firstPorts,
+                       const Metadata& firstMetadata,
+                       const ade::NodeHandle& second, std::vector<std::size_t> secondPorts,
+                       const Metadata& secondMetadata,
                        bool& isAlreadyVisited) {
     if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
         throw std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
