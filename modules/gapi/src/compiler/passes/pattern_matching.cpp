@@ -379,29 +379,29 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
             ++i;
             continue;
         }
-    
+
         SubgraphMatch::M inputApiMatch;
         SubgraphMatch::M outputApiMatch;
-      
+
         // Traversing current result for starting OPs
         for (auto it = subgraphStartOps.begin(); it != subgraphStartOps.end() && found; ++it) {
             auto match = *it;
             auto patternInputEdges = match.first->inEdges();
             auto testInputEdges = match.second->inEdges();
-    
+
             SubgraphMatch::S patternInNodes(match.first->inNodes().begin(), match.first->inNodes().end());
             SubgraphMatch::S testInNodes(match.second->inNodes().begin(), match.second->inNodes().end());
-    
+
             if (patternInNodes.size() < testInNodes.size()) {
                 inputApiMatch.clear();
                 found = false;
                 break;
             }
             // Else, patternInNodes.size() > testInNodes.size() is considered as valid case.
-    
+
             // Match pattern input DATA nodes with boundary matched test DATA nodes.
             for (auto patternInEdge : patternInputEdges) {
-    
+
                 // Not all start OP nodes are located in the beginning of the pattern graph
                 // Start OP may have one input DATA node as an Protocol IN node and other
                 // input DATA nodes produced from another operations
@@ -414,11 +414,11 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 auto matchedIt = std::find_if(testInputEdges.begin(), testInputEdges.end(),
                     [&](const ade::EdgeHandle& testInEdge) -> bool {
                     auto testInputPort = testGraph.metadata(testInEdge).get<cv::gimpl::Input>().port;
-    
+
                     if (patternInputPort != testInputPort) {
                         return false;
                     }
-    
+
                     auto foundIt = inputApiMatch.find(patternInEdge->srcNode());
                     if (foundIt != inputApiMatch.end()) {
                         if (testInEdge->srcNode() != foundIt->second) {
@@ -431,7 +431,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                     inputApiMatch[patternInEdge->srcNode()] = testInEdge->srcNode();
                     return true;
                 });
-    
+
                 if (matchedIt == testInputEdges.end()) {
                     inputApiMatch.clear();
                     found  = false;
@@ -439,14 +439,14 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 }
             } // Loop traversed patternInputEdges
         } // Loop traversed sugraphStartOps
-   
+
         if (!found) {
             // Pattern IN data nodes can not be matched.
             // Switch to the next combination of starting points
             ++i;
             continue;
         }
- 
+
         // Create vector with the correctly ordered IN data nodes in the test subgraph
         std::vector<ade::NodeHandle> inputTestDataNodes;
         for (auto inPatternNode : firstPatternDataNodes) {
@@ -459,7 +459,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         for (auto match : subgraphEndOps) {
             auto patternOutputEdges = match.first->outEdges();
             auto testOutputEdges = match.second->outEdges();
-    
+
             GAPI_Assert(patternOutputEdges.size() == testOutputEdges.size()
                         &&
                         "Ending OP nodes are matched, so OPs' outputs count shall be the same!");
@@ -479,7 +479,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 auto matchedIt = std::find_if(testOutputEdges.begin(), testOutputEdges.end(),
                     [&](const ade::EdgeHandle& testOutEdge) -> bool {
                     auto testOutputPort = testGraph.metadata(testOutEdge).get<cv::gimpl::Output>().port;
-    
+
                     if (patternOutputPort != testOutputPort) {
                         return false;
                     }
@@ -493,7 +493,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                             "There shall be a match for every OUT data node from ending OP node,"
                             "if ending OP node matches");
             }
-    
+
         }
 
         // Create vector with the correctly ordered OUT data nodes in the test subgraph
@@ -501,18 +501,18 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         for (auto outPatternNode : lastPatternDataNodes) {
             outputTestDataNodes.push_back(outputApiMatch[outPatternNode]);
         }
-    
+
         SubgraphMatch subgraph;
-    
+
         subgraph.inputDataNodes = std::move(inputApiMatch);
         subgraph.startOpNodes = std::move(subgraphStartOps);
         subgraph.internalLayers = std::move(subgraphInternals);
         subgraph.finishOpNodes = std::move(subgraphEndOps);
         subgraph.outputDataNodes = std::move(outputApiMatch);
-    
+
         subgraph.inputTestDataNodes = std::move(inputTestDataNodes);
         subgraph.outputTestDataNodes = std::move(outputTestDataNodes);
-    
+
         return subgraph;
 
     }
