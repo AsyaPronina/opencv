@@ -9,6 +9,8 @@
 #define OPENCV_GAPI_PATTERN_MATCHING_HPP
 
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #include <list>
 
 #include "compiler/gmodel.hpp"
