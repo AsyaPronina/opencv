@@ -329,27 +329,27 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 // find a matching in labeled descendants of corresponding test node
                 for (const auto& patternNode : patternOutputNodesLabeled) {
                     bool isAlreadyVisited = false;
-                    const auto& patternNodeMetadata = patternGraph.metadata(patternNode.first);
+                    const auto& patternNodeMeta = patternGraph.metadata(patternNode.first);
 
                     auto testIt = std::find_if(testOutputNodesLabeled.begin(),
                                                testOutputNodesLabeled.end(),
                         [&](const std::pair<const ade::NodeHandle,
                                            std::vector<std::size_t>>& testNode) {
-                        const auto& testNodeMetadata = testGraph.metadata(testNode.first);
+                        const auto& testNodeMeta = testGraph.metadata(testNode.first);
 
-                        if (patternNodeMetadata.get<cv::gimpl::NodeType>().t
+                        if (patternNodeMeta.get<cv::gimpl::NodeType>().t
                             == cv::gimpl::NodeType::DATA) {
                             return compareDataNodes(patternNode.first, patternNode.second,
-                                                    patternNodeMetadata,
+                                                    patternNodeMeta,
                                                     testNode.first, testNode.second,
-                                                    testNodeMetadata);
+                                                    testNodeMeta);
                         }
                         else {
                             return compareOpNodes(matchedVisitedNodes,
                                                   patternNode.first, patternNode.second,
-                                                  patternNodeMetadata,
+                                                  patternNodeMeta,
                                                   testNode.first, testNode.second,
-                                                  testNodeMetadata,
+                                                  testNodeMeta,
                                                   isAlreadyVisited);
                         }
                     });
