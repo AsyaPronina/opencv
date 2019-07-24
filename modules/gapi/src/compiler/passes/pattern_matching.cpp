@@ -37,10 +37,10 @@ using LabeledNodes = std::unordered_map
 // @param second - second node to compare
 // @param secondPorts - a single element vector with second DATA node's producer output port
 // @param secondMeta - metadata of second
-bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::size_t>& firstPorts,
-                         const Metadata& firstMeta,
-                         const ade::NodeHandle& second, const std::vector<std::size_t>& secondPorts,
-                         const Metadata& secondMeta) {
+bool compareDataNodes(const ade::NodeHandle& first, const std::vector<std::size_t>& firstPorts,
+                      const Metadata& firstMeta,
+                      const ade::NodeHandle& second, const std::vector<std::size_t>& secondPorts,
+                      const Metadata& secondMeta) {
     if (secondMeta.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
         throw std::logic_error("NodeType of passed node as second argument"
                                "shall be NodeType::DATA!");
@@ -74,8 +74,7 @@ bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::si
 //    - if any of the nodes are in the array with visited matchings, then:
 //      first node is equal to found matching first argument and
 //      second node is equal to found matching second argument
-
-
+//
 // @param first - first node to compare
 // @param firstPorts - ports' vector of current connections between first node and an parent active
 //                     DATA node
@@ -85,12 +84,12 @@ bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::si
 //                      active DATA node
 // @param secondMeta - metadata of second
 // @param [out] isAlreadyVisited - set to true if first and second nodes have been already visited
-bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
-                       const ade::NodeHandle& first, std::vector<std::size_t> firstPorts,
-                       const Metadata& firstMeta,
-                       const ade::NodeHandle& second, std::vector<std::size_t> secondPorts,
-                       const Metadata& secondMeta,
-                       bool& isAlreadyVisited) {
+bool compareOpNodes(const VisitedMatchings& matchedVisitedNodes,
+                    const ade::NodeHandle& first, std::vector<std::size_t> firstPorts,
+                    const Metadata& firstMeta,
+                    const ade::NodeHandle& second, std::vector<std::size_t> secondPorts,
+                    const Metadata& secondMeta,
+                    bool& isAlreadyVisited) {
     if (secondMeta.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
         throw std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
     }
@@ -199,10 +198,10 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
             bool stub = false;
             if (secondMeta.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
-                return opNodesComparator({ },
-                                         firstPatternOpNode, {  }, firstMeta,
-                                         node, {  }, secondMeta,
-                                         stub);
+                return compareOpNodes({ },
+                                      firstPatternOpNode, {  }, firstMeta,
+                                      node, {  }, secondMeta,
+                                      stub);
             }
             else {
                 return false;
@@ -340,18 +339,18 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                         if (patternNodeMetadata.get<cv::gimpl::NodeType>().t
                             == cv::gimpl::NodeType::DATA) {
-                            return dataNodesComparator(patternNode.first, patternNode.second,
-                                                       patternNodeMetadata,
-                                                       testNode.first, testNode.second,
-                                                       testNodeMetadata);
+                            return compareDataNodes(patternNode.first, patternNode.second,
+                                                    patternNodeMetadata,
+                                                    testNode.first, testNode.second,
+                                                    testNodeMetadata);
                         }
                         else {
-                            return opNodesComparator(matchedVisitedNodes,
-                                                     patternNode.first, patternNode.second,
-                                                     patternNodeMetadata,
-                                                     testNode.first, testNode.second,
-                                                     testNodeMetadata,
-                                                     isAlreadyVisited);
+                            return compareOpNodes(matchedVisitedNodes,
+                                                  patternNode.first, patternNode.second,
+                                                  patternNodeMetadata,
+                                                  testNode.first, testNode.second,
+                                                  testNodeMetadata,
+                                                  isAlreadyVisited);
                         }
                     });
 
