@@ -13,17 +13,17 @@ using Graph = cv::gimpl::GModel::Graph;
 using Metadata = typename Graph::CMetadataT;
 using VisitedMatchings = std::list<std::pair<ade::NodeHandle, ade::NodeHandle>>;
 
-using L = std::unordered_map
-    < // reader node
-      ade::NodeHandle
-      // if the reader node above is:
-      //  - DATA node: then vector is 1-element vector containing port number of
-      //    the input edge
-      //  - OP node: then vector is ports' vector of current connections between
-      //    this node and an parent active DATA node
-    , std::vector<std::size_t>
-    , ade::HandleHasher<ade::Node>
-    >;
+using LabeledNodes = std::unordered_map
+                    < // reader node
+                      ade::NodeHandle
+                      // if the reader node above is:
+                      //  - DATA node: then vector is 1-element vector containing port number of
+                      //    the input edge
+                      //  - OP node: then vector is ports' vector of current connections between
+                      //    this node and an parent active DATA node
+                    , std::vector<std::size_t>
+                    , ade::HandleHasher<ade::Node>
+                    >;
 
 // Returns true if two DATA nodes are semantically and structurally identical:
 //  - both nodes have the same GShape
@@ -304,8 +304,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 // For every descendant store the port of the edge connecting to it.
                 // NOTE: the nature of port number may vary: it may be either IN for OP nodes
                 // or OUT for DATA ones
-                L patternOutputNodesLabeled;
-                L testOutputNodesLabeled;
+                LabeledNodes patternOutputNodesLabeled;
+                LabeledNodes testOutputNodesLabeled;
 
                 auto patternOutputEdges = matchIt->first->outEdges();
                 auto testOutputEdges = matchIt->second->outEdges();
