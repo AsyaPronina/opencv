@@ -33,21 +33,21 @@ using L = std::unordered_map
 //
 // @param first - first node to compare
 // @param firstPorts - a single element vector with first DATA node's producer output port
-// @param firstMetadata - metadata of first
+// @param firstMeta - metadata of first
 // @param second - second node to compare
 // @param secondPorts - a single element vector with second DATA node's producer output port
-// @param secondMetadata - metadata of second
+// @param secondMeta - metadata of second
 bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::size_t>& firstPorts,
-                         const Metadata& firstMetadata,
+                         const Metadata& firstMeta,
                          const ade::NodeHandle& second, const std::vector<std::size_t>& secondPorts,
-                         const Metadata& secondMetadata) {
-    if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
+                         const Metadata& secondMeta) {
+    if (secondMeta.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::DATA) {
         throw std::logic_error("NodeType of passed node as second argument"
                                "shall be NodeType::DATA!");
     }
 
-    if (firstMetadata.get<cv::gimpl::Data>().shape !=
-           secondMetadata.get<cv::gimpl::Data>().shape) {
+    if (firstMeta.get<cv::gimpl::Data>().shape !=
+           secondMeta.get<cv::gimpl::Data>().shape) {
         return false;
     }
 
@@ -79,19 +79,19 @@ bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::si
 // @param first - first node to compare
 // @param firstPorts - ports' vector of current connections between first node and an parent active
 //                     DATA node
-// @param firstMetadata - metadata of first
+// @param firstMeta - metadata of first
 // @param second - second node to compare
 // @param secondPorts - ports' vector of current connections between second node and an parent
 //                      active DATA node
-// @param secondMetadata - metadata of second
+// @param secondMeta - metadata of second
 // @param [out] isAlreadyVisited - set to true if first and second nodes have been already visited
 bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
                        const ade::NodeHandle& first, std::vector<std::size_t> firstPorts,
-                       const Metadata& firstMetadata,
+                       const Metadata& firstMeta,
                        const ade::NodeHandle& second, std::vector<std::size_t> secondPorts,
-                       const Metadata& secondMetadata,
+                       const Metadata& secondMeta,
                        bool& isAlreadyVisited) {
-    if (secondMetadata.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
+    if (secondMeta.get<cv::gimpl::NodeType>().t != cv::gimpl::NodeType::OP) {
         throw std::logic_error("NodeType of passed node as second argument shall be NodeType::OP!");
     }
 
@@ -99,7 +99,7 @@ bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
     // output DATA nodes counts from kernels are the same.
     // Assuming that if kernels names are the same then
     // input DATA nodes counts to kernels are the same.
-    if (firstMetadata.get<cv::gimpl::Op>().k.name != secondMetadata.get<cv::gimpl::Op>().k.name) {
+    if (firstMeta.get<cv::gimpl::Op>().k.name != secondMeta.get<cv::gimpl::Op>().k.name) {
         return false;
     }
 
@@ -190,18 +190,18 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
     // in test graph.
     auto testNodes = testGraph.nodes();
     for (const auto& firstPatternOpNode : firstPatternOpNodes) {
-        const auto& firstMetadata = patternGraph.metadata(firstPatternOpNode);
+        const auto& firstMeta = patternGraph.metadata(firstPatternOpNode);
 
         std::vector<ade::NodeHandle> possibleMatchings;
         std::copy_if(testNodes.begin(), testNodes.end(), std::back_inserter(possibleMatchings),
             [&](const ade::NodeHandle& node) {
-            const auto& secondMetadata = testGraph.metadata(node);
+            const auto& secondMeta = testGraph.metadata(node);
 
             bool stub = false;
-            if (secondMetadata.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
+            if (secondMeta.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
                 return opNodesComparator({ },
-                                         firstPatternOpNode, {  }, firstMetadata,
-                                         node, {  }, secondMetadata,
+                                         firstPatternOpNode, {  }, firstMeta,
+                                         node, {  }, secondMeta,
                                          stub);
             }
             else {
