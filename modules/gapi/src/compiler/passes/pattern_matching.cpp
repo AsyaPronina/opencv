@@ -187,34 +187,33 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
     // For every starting OP node of pattern identify matching candidates(there may be many)
     // in test graph.
-    auto testNodes = testGraph.nodes();
+    auto testOpNodes = ade::util::filter(testGraph.nodes(),
+                                         [&](const ade::NodeHandle& node) {
+                                             return testGraph.metadata(node).
+                                                        get<cv::gimpl::NodeType>().t
+                                                    == cv::gimpl::NodeType::OP;
+                                         });
     for (const auto& firstPatternOpNode : firstPatternOpNodes) {
         const auto& firstMeta = patternGraph.metadata(firstPatternOpNode);
 
-        std::vector<ade::NodeHandle> possibleMatchings;
-        std::copy_if(testNodes.begin(), testNodes.end(), std::back_inserter(possibleMatchings),
-            [&](const ade::NodeHandle& node) {
-            const auto& secondMeta = testGraph.metadata(node);
+        auto& possibleMatchings = allMatchingsForFirstOpNodes[firstPatternOpNode];
+        std::copy_if(testOpNodes.begin(), testOpNodes.end(), std::back_inserter(possibleMatchings),
+            [&](const ade::NodeHandle& testOpnode) {
+                const auto& secondMeta = testGraph.metadata(testOpnode);
 
-            bool stub = false;
-            if (secondMeta.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
+                bool stub = false;
                 return compareOpNodes({ },
                                       firstPatternOpNode, {  }, firstMeta,
-                                      node, {  }, secondMeta,
+                                      testOpnode, {  }, secondMeta,
                                       stub);
-            }
-            else {
-                return false;
-            }
-        });
+            });
+
+        if (possibleMatchings.size() == 0) {
+            // Pattern graph is not matched
+            return SubgraphMatch { };
+        }
 
         possibleStartPointsCount *= possibleMatchings.size();
-        allMatchingsForFirstOpNodes[firstPatternOpNode] = std::move(possibleMatchings);
-    }
-
-    if (possibleStartPointsCount == 0) {
-        // Pattern graph is not matched
-        return SubgraphMatch { };
     }
 
     SubgraphMatch::M subgraphStartOps;
@@ -248,7 +247,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         //
         // This loop pushes the next sample from the cartesian product of candidates sets
         // to matchedVisitedNodes list.
-        std::size_t div = i;
+        std::size_t quo = i;
         for (const auto& allMatchingsForFirstOpNode : allMatchingsForFirstOpNodes) {
             // TODO: order is not determined: for ex., for last node.
             // May be use ordered set and map to ensure order?
@@ -256,8 +255,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
             // i is traversing full cartesian product of candidates sets.
             // The below code block decodes i to a particular combination from that product.
-            std::size_t index = div % size;
-            div = div / size;
+            std::size_t index = quo % size;
+            quo = quo / size;
             const auto& firstTestOpNode = allMatchingsForFirstOpNode.second[index];
             matchedVisitedNodes.push_back({ allMatchingsForFirstOpNode.first, firstTestOpNode });
         }
