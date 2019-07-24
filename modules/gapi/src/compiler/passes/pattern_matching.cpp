@@ -55,8 +55,8 @@ bool dataNodesComparator(const ade::NodeHandle& first, const std::vector<std::si
         return false;
     }
 
-    auto firstOutputEdges = first->outEdges();
-    auto secondOutputEdges = second->outEdges();
+    const auto& firstOutputEdges = first->outEdges();
+    const auto& secondOutputEdges = second->outEdges();
 
     if (firstOutputEdges.size() != secondOutputEdges.size()) {
         return false;
@@ -111,11 +111,12 @@ bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
 
     // Shall work, but it is good to test on the cases where multiple start pattern OP nodes
     // maps to the test's one.
-    auto foundit = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(),
-                               [&first, &second](std::pair<ade::NodeHandle, ade::NodeHandle> match)
+    auto foundIt = std::find_if(matchedVisitedNodes.begin(), matchedVisitedNodes.end(),
+                               [&first, &second](const std::pair<ade::NodeHandle,
+                                                                 ade::NodeHandle>& match)
                                {return first == match.first || second == match.second; });
-    if (foundit != matchedVisitedNodes.end()) {
-        if (first != foundit->first || second != foundit->second) {
+    if (foundIt != matchedVisitedNodes.end()) {
+        if (first != foundIt->first || second != foundIt->second) {
             return false;
         }
 
@@ -126,8 +127,8 @@ bool opNodesComparator(const VisitedMatchings& matchedVisitedNodes,
 };
 
 // Depending on type of the node retrieve port number (IN/OUT) of the edge entering this node.
-std::size_t labelOf (ade::NodeHandle node, // reader node
-                     ade::EdgeHandle edge, // edge entering the reader node
+std::size_t labelOf (const ade::NodeHandle& node, // reader node
+                     const ade::EdgeHandle& edge, // edge entering the reader node
                      const Graph& graph) { // graph containing node and edge
 
     if (graph.metadata(node).get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
@@ -163,15 +164,15 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
     // Identify operations which start and end our pattern
     SubgraphMatch::S firstPatternOpNodes, lastPatternOpNodes;
 
-    auto firstPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().in_nhs;
-    auto lastPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().out_nhs;
+    const auto& firstPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().in_nhs;
+    const auto& lastPatternDataNodes = patternGraph.metadata().get<cv::gimpl::Protocol>().out_nhs;
 
-    for (auto node : firstPatternDataNodes) {
+    for (const auto& node : firstPatternDataNodes) {
         auto opNodes = node->outNodes();
         firstPatternOpNodes.insert(opNodes.begin(), opNodes.end());
     }
 
-    for (auto node : lastPatternDataNodes) {
+    for (const auto& node : lastPatternDataNodes) {
         auto opNodes = node->inNodes();
         // May be switched to lastPatternOpNodes.insert(*opNodes.begin());
         lastPatternOpNodes.insert(opNodes.begin(), opNodes.end());
@@ -188,13 +189,13 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
     // For every starting OP node of pattern identify matching candidates(there may be many)
     // in test graph.
     auto testNodes = testGraph.nodes();
-    for (auto firstPatternOpNode : firstPatternOpNodes) {
-        auto firstMetadata = patternGraph.metadata(firstPatternOpNode);
+    for (const auto& firstPatternOpNode : firstPatternOpNodes) {
+        const auto& firstMetadata = patternGraph.metadata(firstPatternOpNode);
 
         std::vector<ade::NodeHandle> possibleMatchings;
         std::copy_if(testNodes.begin(), testNodes.end(), std::back_inserter(possibleMatchings),
             [&](const ade::NodeHandle& node) {
-            auto secondMetadata = testGraph.metadata(node);
+            const auto& secondMetadata = testGraph.metadata(node);
 
             bool stub = false;
             if (secondMetadata.get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
@@ -249,7 +250,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         // This loop pushes the next sample from the cartesian product of candidates sets
         // to matchedVisitedNodes list.
         std::size_t div = i;
-        for (auto allMatchingsForFirstOpNode : allMatchingsForFirstOpNodes) {
+        for (const auto& allMatchingsForFirstOpNode : allMatchingsForFirstOpNodes) {
             // TODO: order is not determined: for ex., for last node.
             // May be use ordered set and map to ensure order?
             auto size = allMatchingsForFirstOpNode.second.size();
@@ -258,7 +259,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
             // The below code block decodes i to a particular combination from that product.
             std::size_t index = div % size;
             div = div / size;
-            auto firstTestOpNode = allMatchingsForFirstOpNode.second[index];
+            const auto& firstTestOpNode = allMatchingsForFirstOpNode.second[index];
             matchedVisitedNodes.push_back({ allMatchingsForFirstOpNode.first, firstTestOpNode });
         }
 
@@ -275,7 +276,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                 // Check if a given matchIt->first node is an pattern-ending OP node.
                 // If it is just remember it in a special map.
-                bool cond1 = std::find(lastPatternOpNodes.begin(), lastPatternOpNodes.end(),
+                bool cond1 = std::find(lastPatternOpNodes.begin(),
+                                       lastPatternOpNodes.end(),
                                        matchIt->first)
                              != lastPatternOpNodes.end();
                 if (cond1) {
@@ -284,7 +286,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                 // Check if a given matchIt->first node is an pattern-starting OP node.
                 // If it is just remember it in a special map.
-                bool cond2 = std::find(firstPatternOpNodes.begin(), firstPatternOpNodes.end(),
+                bool cond2 = std::find(firstPatternOpNodes.begin(),
+                                       firstPatternOpNodes.end(),
                                        matchIt->first)
                              != firstPatternOpNodes.end();
                 if (cond2) {
@@ -307,8 +310,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 auto patternOutputEdges = matchIt->first->outEdges();
                 auto testOutputEdges = matchIt->second->outEdges();
 
-                for (auto patternOutputEdge : patternOutputEdges) {
-                    auto dstNh = patternOutputEdge->dstNode();
+                for (const auto& patternOutputEdge : patternOutputEdges) {
+                    const auto& dstNh = patternOutputEdge->dstNode();
                     if (!IS_ENDPOINT(dstNh)) {
                         //Assuming that there is no case for the op node without output data nodes.
                         patternOutputNodesLabeled[dstNh].
@@ -316,8 +319,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                     }
                 }
 
-                for (auto testOutputEdge : testOutputEdges) {
-                    auto dstNh = testOutputEdge->dstNode();
+                for (const auto& testOutputEdge : testOutputEdges) {
+                    const auto& dstNh = testOutputEdge->dstNode();
                     testOutputNodesLabeled[dstNh].
                             push_back(labelOf(dstNh, testOutputEdge, testGraph));
                 }
@@ -325,14 +328,15 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 //---------------------------------------------------------------------------------
                 // Traverse through labeled descendants of pattern node and for every descedant
                 // find a matching in labeled descendants of corresponding test node
-                for (auto patternNode : patternOutputNodesLabeled) {
+                for (const auto& patternNode : patternOutputNodesLabeled) {
                     bool isAlreadyVisited = false;
-                    auto patternNodeMetadata = patternGraph.metadata(patternNode.first);
+                    const auto& patternNodeMetadata = patternGraph.metadata(patternNode.first);
 
                     auto testIt = std::find_if(testOutputNodesLabeled.begin(),
                                                testOutputNodesLabeled.end(),
-                        [&](std::pair<const ade::NodeHandle, std::vector<std::size_t>>& testNode) {
-                        auto testNodeMetadata = testGraph.metadata(testNode.first);
+                        [&](const std::pair<const ade::NodeHandle,
+                                           std::vector<std::size_t>>& testNode) {
+                        const auto& testNodeMetadata = testGraph.metadata(testNode.first);
 
                         if (patternNodeMetadata.get<cv::gimpl::NodeType>().t
                             == cv::gimpl::NodeType::DATA) {
@@ -412,16 +416,16 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
         // Traversing current result for starting OPs
         for (auto it = subgraphStartOps.begin(); it != subgraphStartOps.end() && found; ++it) {
-            auto match = *it;
+            const auto& match = *it;
             auto patternInputEdges = match.first->inEdges();
             auto testInputEdges = match.second->inEdges();
 
-            SubgraphMatch::S patternInNodes(match.first->inNodes().begin(),
-                                            match.first->inNodes().end());
-            SubgraphMatch::S testInNodes(match.second->inNodes().begin(),
-                                         match.second->inNodes().end());
+            SubgraphMatch::S patternUniqInNodes(match.first->inNodes().begin(),
+                                                match.first->inNodes().end());
+            SubgraphMatch::S testUniqInNodes(match.second->inNodes().begin(),
+                                             match.second->inNodes().end());
 
-            if (patternInNodes.size() < testInNodes.size()) {
+            if (patternUniqInNodes.size() < testUniqInNodes.size()) {
                 inputApiMatch.clear();
                 found = false;
                 break;
@@ -429,7 +433,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
             // Else, patternInNodes.size() > testInNodes.size() is considered as valid case.
 
             // Match pattern input DATA nodes with boundary matched test DATA nodes.
-            for (auto patternInEdge : patternInputEdges) {
+            for (const auto& patternInEdge : patternInputEdges) {
 
                 // Not all start OP nodes are located in the beginning of the pattern graph
                 // Start OP may have one input DATA node as an Protocol IN node and other
@@ -480,14 +484,14 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
         // Create vector with the correctly ordered IN data nodes in the test subgraph
         std::vector<ade::NodeHandle> inputTestDataNodes;
-        for (auto inPatternNode : firstPatternDataNodes) {
+        for (const auto& inPatternNode : firstPatternDataNodes) {
             inputTestDataNodes.push_back(inputApiMatch[inPatternNode]);
         }
 
         // Traversing current result for ending OPs
         // There is an assumption that if the pattern subgraph is matched, then
         // OUT data nodes shall be definitely matched
-        for (auto match : subgraphEndOps) {
+        for (const auto& match : subgraphEndOps) {
             auto patternOutputEdges = match.first->outEdges();
             auto testOutputEdges = match.second->outEdges();
 
@@ -496,7 +500,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                         "Ending OP nodes are matched, so OPs' outputs count shall be the same!");
 
             // Match pattern output DATA nodes with boundary matched test DATA nodes.
-            for (auto patternOutEdge : patternOutputEdges) {
+            for (const auto& patternOutEdge : patternOutputEdges) {
 
                 // Not all end OP nodes are located in the ending of the pattern graph
                 // End OP node may have one output DATA node as an Protocol OUT node and other
@@ -531,7 +535,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
         // Create vector with the correctly ordered OUT data nodes in the test subgraph
         std::vector<ade::NodeHandle> outputTestDataNodes;
-        for (auto outPatternNode : lastPatternDataNodes) {
+        for (const auto& outPatternNode : lastPatternDataNodes) {
             outputTestDataNodes.push_back(outputApiMatch[outPatternNode]);
         }
 
