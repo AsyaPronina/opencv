@@ -25,6 +25,14 @@ using LabeledNodes = std::unordered_map
                     , ade::HandleHasher<ade::Node>
                     >;
 
+using MultipleMatchings = std::unordered_map
+                          // pattern OP node
+                         < ade::NodeHandle
+                          // nodes in the test graph which match to the pattern OP node above
+                          , std::vector<ade::NodeHandle>
+                          , ade::HandleHasher<ade::Node>
+                         >;
+
 // Returns true if two DATA nodes are semantically and structurally identical:
 //  - both nodes have the same GShape
 //  - both nodes are produced by the same port numbers
@@ -125,10 +133,35 @@ bool compareOpNodes(const VisitedMatchings& matchedVisitedNodes,
     return true;
 };
 
+// Retrieves and return sample from the cartesian product of candidates sets
+VisitedMatchings sampleFromProduct(std::size_t sampleIdx, // index of the sample in the product
+                                   const MultipleMatchings& candidatesSets) // map of nodes to sets
+                                                                            // of candidates
+                                                                           {
+    VisitedMatchings matchingsSample;
+
+    std::size_t quo = sampleIdx;
+    for (const auto& setForNode : candidatesSets) {
+        // TODO: order is not determined: for ex., for last node.
+        // May be use ordered set and map to ensure order?
+        auto size = setForNode.second.size();
+
+        // The below code block decodes sampleIdx into a particular sample from cartesian product
+        // of candidates sets.
+        std::size_t index = quo % size;
+        quo = quo / size;
+        const auto& candidate = setForNode.second[index];
+        matchingsSample.push_back({ setForNode.first, candidate });
+    }
+
+    return matchingsSample;
+}
+
 // Depending on type of the node retrieve port number (IN/OUT) of the edge entering this node.
 std::size_t labelOf (const ade::NodeHandle& node, // reader node
                      const ade::EdgeHandle& edge, // edge entering the reader node
-                     const Graph& graph) { // graph containing node and edge
+                     const Graph& graph) // graph containing node and edge
+                                        {
 
     if (graph.metadata(node).get<cv::gimpl::NodeType>().t == cv::gimpl::NodeType::OP) {
         return graph.metadata(edge).get<cv::gimpl::Input>().port;
@@ -222,11 +255,10 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
     // Structural matching first, semantic matching second.
 
-    // 'found' means pattern is matched.
-    // FIXME: Consider better naming for 'found'.
-    bool found = false;
+    // 'patternFound' means pattern is matched.
+    bool patternFound = false;
     std::size_t i = 0;
-    while (!found && (i < possibleStartPointsCount)) {
+    while (!patternFound && (i < possibleStartPointsCount)) {
         subgraphStartOps.clear();
         subgraphEndOps.clear();
         subgraphInternals.clear();
@@ -240,24 +272,15 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         //                                              x2 : [ y2, y3 ]
         // Cartesian product of two these candidates sets (for x1 and x2 pattern nodes
         // correspondingly) produces two samples of matchings for x1, x2:
-        //                         [ y1, y2 ]
-        //                         [ y1, y3 ]
+        //                         [ (x1, y1), (x2, y2) ]
+        //                         [ (x1, y1), (x2, y3) ]
         //
-        // This loop pushes the next sample from the cartesian product of candidates sets
-        // to matchedVisitedNodes list.
-        std::size_t quo = i;
-        for (const auto& allMatchingsForStartOpNode : allMatchingsForStartOpNodes) {
-            // TODO: order is not determined: for ex., for last node.
-            // May be use ordered set and map to ensure order?
-            auto size = allMatchingsForStartOpNode.second.size();
 
-            // i is traversing full cartesian product of candidates sets.
-            // The below code block decodes i to a particular combination from that product.
-            std::size_t index = quo % size;
-            quo = quo / size;
-            const auto& startTestCandidate = allMatchingsForStartOpNode.second[index];
-            matchedVisitedNodes.push_back({ allMatchingsForStartOpNode.first, startTestCandidate });
-        }
+
+        // Here we fill matchedVisitedNodes list with the next sample from the cartesian product
+        // of candidates sets.
+        // i is traversing full cartesian product of candidates sets.
+        matchedVisitedNodes = sampleFromProduct(i, allMatchingsForStartOpNodes);
 
         bool stop = false;
 
@@ -392,7 +415,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 if (matchIt == matchedVisitedNodes.end()) {
                     // Found
                     stop = true;
-                    found = true;
+                    patternFound = true;
                 }
 
                 // Update 'size' with the size of the new level of matchings
@@ -400,7 +423,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
             }
         }
 
-        if (!found){
+        if (!patternFound){
             // Pattern subgraph is not matched.
             // Switch to the next combination of starting points
             ++i;
@@ -411,7 +434,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         SubgraphMatch::M outputApiMatch;
 
         // Traversing current result for starting OPs
-        for (auto it = subgraphStartOps.begin(); it != subgraphStartOps.end() && found; ++it) {
+        for (auto it = subgraphStartOps.begin();
+                it != subgraphStartOps.end() && patternFound; ++it) {
             const auto& match = *it;
             auto patternInputEdges = match.first->inEdges();
             auto testInputEdges = match.second->inEdges();
@@ -423,7 +447,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
             if (patternUniqInNodes.size() < testUniqInNodes.size()) {
                 inputApiMatch.clear();
-                found = false;
+                patternFound = false;
                 break;
             }
             // Else, patternInNodes.size() > testInNodes.size() is considered as valid case.
@@ -465,13 +489,13 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
                 if (matchedIt == testInputEdges.end()) {
                     inputApiMatch.clear();
-                    found  = false;
+                    patternFound  = false;
                     break;
                 }
             } // Loop traversed patternInputEdges
         } // Loop traversed sugraphStartOps
 
-        if (!found) {
+        if (!patternFound) {
             // Pattern IN data nodes can not be matched.
             // Switch to the next combination of starting points
             ++i;
