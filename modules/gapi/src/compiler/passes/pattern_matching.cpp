@@ -276,7 +276,6 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
         //                         [ (x1, y1), (x2, y3) ]
         //
 
-
         // Here we fill matchedVisitedNodes list with the next sample from the cartesian product
         // of candidates sets.
         // i is traversing full cartesian product of candidates sets.
@@ -319,7 +318,7 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                 }
 
                 //-------------------------------------------------------------------------------
-                // Given the current pattern/test matching of nodes, traverse their descendatnts.
+                // Given the current pattern/test matching of nodes, traverse their descendants.
                 // For every descendant store the port of the edge connecting to it.
                 // NOTE: the nature of port number may vary: it may be either IN for OP nodes
                 // or OUT for DATA ones
@@ -398,8 +397,8 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
 
             // matchedVisitedNodes content before previous loop execution:
             //     op1 <--> t_op1, op2 <--> t_op2
-            // matchedVisitedNodes content after previous loop execution (extent with the next level
-            // of matchings):
+            // matchedVisitedNodes content after previous loop execution (extended with the next
+            // level of matchings):
             //     op1 <--> t_op1, op2 <--> t_op2 | d1 <--> t_d1, d2 <--> t_d2, d3 <--> t_d3, d4 <--> t_d4
             //                                           ^
             //                                           |
