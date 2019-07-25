@@ -36,6 +36,7 @@ namespace gimpl {
 
         std::list<ade::NodeHandle> internalLayers;
 
+        // FIXME: switch to operator bool() instead
         bool ok() const {
             return    !inputDataNodes.empty() && !startOpNodes.empty()
                    && !finishOpNodes.empty() && !outputDataNodes.empty()
@@ -48,12 +49,12 @@ namespace gimpl {
 
            allNodes.insert(inputTestDataNodes.begin(), inputTestDataNodes.end());
 
-           for (auto it = startOpNodes.begin(); it != startOpNodes.end(); ++it) {
-               allNodes.insert(it->second);
+           for (const auto& startOpMatch : startOpNodes) {
+               allNodes.insert(startOpMatch.second);
            }
 
-           for (auto it = finishOpNodes.begin(); it != finishOpNodes.end(); ++it) {
-               allNodes.insert(it->second);
+           for (const auto& finishOpMatch : finishOpNodes) {
+               allNodes.insert(finishOpMatch.second);
            }
 
            allNodes.insert(outputTestDataNodes.begin(), outputTestDataNodes.end());
@@ -65,16 +66,16 @@ namespace gimpl {
 
        S startOps() {
             S sOps;
-            for (auto opNope : startOpNodes) {
-               sOps.insert(opNope.second);
+            for (const auto& opMatch : startOpNodes) {
+               sOps.insert(opMatch.second);
             }
             return sOps;
        }
 
        S finishOps() {
             S fOps;
-            for (auto opNope : finishOpNodes) {
-               fOps.insert(opNope.second);
+            for (const auto& opMatch : finishOpNodes) {
+               fOps.insert(opMatch.second);
             }
             return fOps;
        }

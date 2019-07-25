@@ -356,21 +356,26 @@ cv::gimpl::findMatches(const cv::gimpl::GModel::Graph& patternGraph,
                                            std::vector<std::size_t>>& testNode) {
                         const auto& testNodeMeta = testGraph.metadata(testNode.first);
 
-                        if (patternNodeMeta.get<cv::gimpl::NodeType>().t
-                            == cv::gimpl::NodeType::DATA) {
+                        auto patternNodeType = patternNodeMeta.get<cv::gimpl::NodeType>().t;
+
+                        switch(patternNodeType) {
+                        case cv::gimpl::NodeType::DATA:
                             return compareDataNodes(patternNode.first, patternNode.second,
                                                     patternNodeMeta,
                                                     testNode.first, testNode.second,
                                                     testNodeMeta);
-                        }
-                        else {
+                        case cv::gimpl::NodeType::OP:
                             return compareOpNodes(matchedVisitedNodes,
                                                   patternNode.first, patternNode.second,
                                                   patternNodeMeta,
                                                   testNode.first, testNode.second,
                                                   testNodeMeta,
                                                   isAlreadyVisited);
+                        default:
+                            GAPI_Assert(false && "Unsupported Node type!");
                         }
+
+                        return false;
                     });
 
                     if (testIt == testOutputNodesLabeled.end()) {
