@@ -93,7 +93,7 @@ TEST(PatternMatching, TestFuncDoesNotChangeTestGraph)
     EXPECT_EQ(1u, output_data_nhs.size());
     EXPECT_EQ(in_nh, *input_data_nhs.begin());
     EXPECT_EQ(out_nh, *output_data_nhs.begin());
-    EXPECT_EQ(0u, in_nh->inEdges().size());
+    EXPECT_EQ(0, in_nh->inEdges().size());
     EXPECT_EQ(0u, out_nh->outEdges().size());
     EXPECT_EQ(1u, in_nh->outEdges().size());
     EXPECT_EQ(1u, out_nh->inEdges().size());
@@ -632,8 +632,8 @@ TEST(PatternMatching, TestInexactMatchOfInOutData)
     EXPECT_EQ(matching_test::V{ in_nh }, match.protoIns());
     EXPECT_EQ(matching_test::V{ tmp_nh }, match.protoOuts());
 
-    EXPECT_GT(in_nh->outEdges().size(), 1u);
-    EXPECT_GT(tmp_nh->outEdges().size(), 1u);
+    EXPECT_GT(1, in_nh->outEdges().size());
+    EXPECT_GT(1u, tmp_nh->outEdges().size());
 }
 
 //FIXME: The start ops matching shall be reworked to more smarter way.
