@@ -470,6 +470,10 @@ struct Infer: public cv::detail::KernelTag {
                         && "Non-GMat inputs are not supported");
 
             const auto &meta = util::get<cv::GMatDesc>(mm);
+
+            std::cout << "SET RESIZE ALGORITHM!" << std::endl;
+            std::cout << meta.size.height << "x" << meta.size.width << std::endl;
+
             ii->setPrecision(toIE(meta.depth));
             ii->getPreProcess().setResizeAlgorithm(IE::RESIZE_BILINEAR);
         }

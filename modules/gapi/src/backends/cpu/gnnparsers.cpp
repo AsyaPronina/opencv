@@ -177,6 +177,8 @@ void parseSSDBL(const cv::Mat&  in_ssd_result,
                 std::vector<cv::Rect>& out_boxes,
                 std::vector<int>&      out_labels)
 {
+    std::cout << "size: " << in_ssd_result.size[0] << 'x' << in_ssd_result.size[1] << std::endl;
+    std::cout << "dims " << in_ssd_result.size.dims() << std::endl;
     cv::gapi::nn::SSDParser parser(in_ssd_result.size, in_size, in_ssd_result.ptr<float>());
     out_boxes.clear();
     out_labels.clear();
@@ -255,12 +257,24 @@ void parseYolo(const cv::Mat&  in_yolo_result,
                std::vector<int>&      out_labels)
 {
     const auto& dims = in_yolo_result.size;
-    GAPI_Assert(dims.dims() == 4);
+    GAPI_Assert(dims.dims() == 4 || dims.dims() == 2);
+
     GAPI_Assert(dims[0] == 1);
-    GAPI_Assert(dims[1] == 13);
-    GAPI_Assert(dims[2] == 13);
-    GAPI_Assert(dims[3] % 5 == 0); // 5 boxes
-    const auto num_classes = dims[3] / 5 - 5;
+    auto num_classes = 0;
+
+    if (dims.dims() == 4)
+    {
+        GAPI_Assert(dims[1] == 13);
+        GAPI_Assert(dims[2] == 13);
+        GAPI_Assert(dims[3] % 5 == 0); // 5 boxes
+        num_classes = dims[3] / 5 - 5;
+    }
+    else if (dims.dims() == 2)
+    {
+        GAPI_Assert(dims[1] % (5 * 13 * 13) == 0);
+        num_classes = dims[1] / (5 * 13 * 13) - 5;
+    }
+
     GAPI_Assert(num_classes > 0);
     GAPI_Assert(0 < nms_threshold && nms_threshold <= 1);
     out_boxes.clear();
@@ -287,6 +301,9 @@ void parseYolo(const cv::Mat&  in_yolo_result,
             double y = parser.y(i, b);
             double height = parser.height(i, b, anchors[2 * b + 1]);
             double width = parser.width(i, b, anchors[2 * b]);
+
+            std::cout << "x : " << x << ", y: " << y << std::endl;
+            std::cout << "height : " << height << ", width: " << width << std::endl;
 
             for (int label = 0; label < num_classes; ++label)
             {
