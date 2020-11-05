@@ -302,9 +302,6 @@ void parseYolo(const cv::Mat&  in_yolo_result,
             double height = parser.height(i, b, anchors[2 * b + 1]);
             double width = parser.width(i, b, anchors[2 * b]);
 
-            std::cout << "x : " << x << ", y: " << y << std::endl;
-            std::cout << "height : " << height << ", width: " << width << std::endl;
-
             for (int label = 0; label < num_classes; ++label)
             {
                 float prob = scale * parser.classConf(i,b,label);

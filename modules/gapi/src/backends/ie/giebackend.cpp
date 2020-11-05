@@ -475,7 +475,7 @@ struct Infer: public cv::detail::KernelTag {
             std::cout << meta.size.height << "x" << meta.size.width << std::endl;
 
             ii->setPrecision(toIE(meta.depth));
-            ii->getPreProcess().setResizeAlgorithm(IE::RESIZE_BILINEAR);
+            ii->getPreProcess().setResizeAlgorithm(InferenceEngine::RESIZE_BILINEAR);
         }
 
         // FIXME: It would be nice here to have an exact number of network's
@@ -506,7 +506,8 @@ struct Infer: public cv::detail::KernelTag {
             // FIXME: By default here we trait our inputs as images.
             // May be we need to make some more intelligence here about it
             IE::Blob::Ptr this_blob = wrapIE(this_mat, cv::gapi::ie::TraitAs::IMAGE);
-            iec.this_request.SetBlob(uu.params.input_names[i], this_blob);
+            iec.this_request.SetBlob(uu.params.input_names[i], this_blob,
+                                     uu.inputs.at(uu.params.input_names[i])->getPreProcess());
         }
         iec.this_request.Infer();
         for (auto i : ade::util::iota(uu.params.num_out)) {
