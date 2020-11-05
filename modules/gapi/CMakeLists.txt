@@ -74,6 +74,7 @@ set(gapi_srcs
     src/api/kernels_imgproc.cpp
     src/api/kernels_video.cpp
     src/api/kernels_nnparsers.cpp
+    src/api/kernels_streaming.cpp
     src/api/render.cpp
     src/api/render_ocv.cpp
     src/api/ginfer.cpp
@@ -97,6 +98,7 @@ set(gapi_srcs
     src/compiler/passes/pattern_matching.cpp
     src/compiler/passes/perform_substitution.cpp
     src/compiler/passes/streaming.cpp
+    src/compiler/passes/intrin.cpp
 
     # Executor
     src/executor/gexecutor.cpp
@@ -128,6 +130,9 @@ set(gapi_srcs
     # if and only if IE support is enabled
     src/backends/ie/giebackend.cpp
     src/backends/ie/giebackend/giewrapper.cpp
+
+    # ONNX Backend.
+    src/backends/onnx/gonnxbackend.cpp
 
     # Render Backend.
     src/backends/render/grenderocv.cpp
@@ -203,9 +208,19 @@ if(HAVE_PLAIDML)
   ocv_target_include_directories(${the_module} SYSTEM PRIVATE ${PLAIDML_INCLUDE_DIRS})
 endif()
 
+
 if(WIN32)
   # Required for htonl/ntohl on Windows
   ocv_target_link_libraries(${the_module} PRIVATE wsock32 ws2_32)
+endif()
+
+if(HAVE_ONNX)
+  ocv_target_link_libraries(${the_module} PRIVATE ${ONNX_LIBRARY})
+  ocv_target_compile_definitions(${the_module} PRIVATE HAVE_ONNX=1)
+  if(TARGET opencv_test_gapi)
+    ocv_target_compile_definitions(opencv_test_gapi PRIVATE HAVE_ONNX=1)
+    ocv_target_link_libraries(opencv_test_gapi PRIVATE ${ONNX_LIBRARY})
+  endif()
 endif()
 
 ocv_add_perf_tests()
