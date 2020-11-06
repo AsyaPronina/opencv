@@ -508,8 +508,8 @@ struct Infer: public cv::detail::KernelTag {
             // FIXME: By default here we trait our inputs as images.
             // May be we need to make some more intelligence here about it
             IE::Blob::Ptr this_blob = wrapIE(this_mat, cv::gapi::ie::TraitAs::IMAGE);
-            iec.this_request.SetBlob(uu.params.input_names[i], this_blob,
-                                     uu.inputs.at(uu.params.input_names[i])->getPreProcess());
+            iec.this_request.SetBlob(uu.params.input_names[i], this_blob);//,
+                                    // uu.inputs.at(uu.params.input_names[i])->getPreProcess());
         }
         iec.this_request.Infer();
         for (auto i : ade::util::iota(uu.params.num_out)) {

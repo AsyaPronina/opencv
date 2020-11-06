@@ -41,7 +41,7 @@ namespace parsers {
         }
         static const std::vector<float>& defaultAnchors() {
             static std::vector<float> anchors {
-                1.08f, 1.19f, 3.42f, 4.41f, 6.63f, 11.38f, 9.42f, 5.11f, 16.62f, 10.52f
+                0.57273, 0.677385, 1.87446, 2.06253, 3.33843, 5.47434, 7.88282, 3.52778, 9.77052, 9.16828
             };
             return anchors;
         }
