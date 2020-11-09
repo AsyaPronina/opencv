@@ -25,7 +25,6 @@ using GIEParam = cv::gapi::ie::detail::ParamDesc;
 IE::InputsDataMap giewrap::toInputsDataMap (const IE::ConstInputsDataMap& inputs) {
     IE::InputsDataMap transformed;
     auto convert = [](const std::pair<std::string, IE::InputInfo::CPtr>& p) {
-        std::shared_ptr<IE::InputInfo> tmp(nullptr);
         return std::make_pair(p.first, std::const_pointer_cast<IE::InputInfo>(p.second));
     };
     std::transform(inputs.begin(), inputs.end(), std::inserter(transformed, transformed.end()), convert);
