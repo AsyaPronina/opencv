@@ -65,6 +65,7 @@ file(GLOB gapi_ext_hdrs
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/streaming/gstreamer/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/streaming/onevpl/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/plaidml/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/ported_algorithms/ot/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/util/*.hpp"
     )
 
@@ -189,6 +190,18 @@ set(gapi_srcs
     src/backends/onnx/bindings_onnx.cpp
     src/backends/ov/bindings_ov.cpp
     src/backends/python/gpythonbackend.cpp
+
+    # VAS Object Tracking ported algorithm:
+    src/ported_algorithms/ot/vas/components/ot/kalman_filter/kalman_filter_no_opencv.cpp
+    src/ported_algorithms/ot/vas/components/ot/mtt/hungarian_wrap.cpp
+    src/ported_algorithms/ot/vas/components/ot/mtt/objects_associator.cpp
+    src/ported_algorithms/ot/vas/components/ot/mtt/rgb_histogram.cpp
+    src/ported_algorithms/ot/vas/components/ot/object_tracker.cpp
+    src/ported_algorithms/ot/vas/components/ot/short_term_imageless_tracker.cpp
+    src/ported_algorithms/ot/vas/components/ot/tracker.cpp
+    src/ported_algorithms/ot/vas/components/ot/tracklet.cpp
+    src/ported_algorithms/ot/vas/components/ot/zero_term_imageless_tracker.cpp
+    src/ported_algorithms/ot/ot.cpp
 
     # Queue Streaming source
     src/streaming/queue_source.cpp

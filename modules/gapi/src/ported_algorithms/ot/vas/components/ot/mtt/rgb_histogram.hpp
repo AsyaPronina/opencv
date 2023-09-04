@@ -1,0 +1,39 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
+//
+// Copyright (C) 2023 Intel Corporation
+
+#ifndef OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_RGB_HISTOGRAM_HPP
+#define OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_RGB_HISTOGRAM_HPP
+
+namespace vas {
+namespace ot {
+
+class RgbHistogram {
+  public:
+    explicit RgbHistogram(int32_t rgb_bin_size);
+    virtual ~RgbHistogram(void);
+
+    virtual void Compute(const cv::Mat &image, cv::Mat *hist);
+    virtual void ComputeFromBgra32(const cv::Mat &image, cv::Mat *hist);
+    virtual int32_t FeatureSize(void) const; // currently 512 * float32
+
+    static float ComputeSimilarity(const cv::Mat &hist1, const cv::Mat &hist2);
+
+  protected:
+    int32_t rgb_bin_size_;
+    int32_t rgb_num_bins_;
+    int32_t rgb_hist_size_;
+
+    void AccumulateRgbHistogram(const cv::Mat &patch, float *rgb_hist) const;
+    void AccumulateRgbHistogram(const cv::Mat &patch, const cv::Mat &weight, float *rgb_hist) const;
+
+    void AccumulateRgbHistogramFromBgra32(const cv::Mat &patch, float *rgb_hist) const;
+    void AccumulateRgbHistogramFromBgra32(const cv::Mat &patch, const cv::Mat &weight, float *rgb_hist) const;
+};
+
+}; // namespace ot
+}; // namespace vas
+
+#endif // OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_RGB_HISTOGRAM_HPP
