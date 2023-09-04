@@ -39,8 +39,13 @@ GStreamerMediaAdapter::GStreamerMediaAdapter(const cv::GFrameDesc& frameDesc,
                 m_offsets = { videoMeta->offset[0]};
                 break;
             }
+            case cv::MediaFormat::BGR: {
+                m_strides = { videoMeta->stride[0]};
+                m_offsets = { videoMeta->offset[0]};
+                break;
+            }
             default: {
-                GAPI_Error("Non NV12 or GRAY Media format is not expected here");
+                GAPI_Error("Non NV12, GRAY or BGR Media formats are not expected here");
                 break;
             }
         }
@@ -102,7 +107,8 @@ cv::MediaFrame::View GStreamerMediaAdapter::access(cv::MediaFrame::Access access
             GAPI_Assert(GST_VIDEO_INFO_N_PLANES(m_videoInfo.get()) == 2 ||
                         GST_VIDEO_INFO_N_PLANES(m_videoInfo.get()) == 1);
             GAPI_Assert(GST_VIDEO_INFO_FORMAT(m_videoInfo.get()) == GST_VIDEO_FORMAT_NV12 ||
-                        GST_VIDEO_INFO_FORMAT(m_videoInfo.get()) == GST_VIDEO_FORMAT_GRAY8);
+                        GST_VIDEO_INFO_FORMAT(m_videoInfo.get()) == GST_VIDEO_FORMAT_GRAY8 ||
+                        GST_VIDEO_INFO_FORMAT(m_videoInfo.get()) == GST_VIDEO_FORMAT_BGR);
 
             // TODO: Use RAII for map/unmap
             if (access == cv::MediaFrame::Access::W) {
@@ -159,8 +165,23 @@ cv::MediaFrame::View GStreamerMediaAdapter::access(cv::MediaFrame::Access access
             };
             break;
         }
+        case cv::MediaFormat::BGR: {
+            ps = {
+                static_cast<uint8_t*>(GST_VIDEO_FRAME_PLANE_DATA(&m_videoFrame, 0)) + m_offsets[0], // All interleaved planes
+                nullptr,
+                nullptr,
+                nullptr
+            };
+            ss = {
+                static_cast<std::size_t>(m_strides[0]), // One interleaved stride
+                0u,
+                0u,
+                0u
+            };
+            break;
+        }
         default: {
-            GAPI_Error("Non NV12 or GRAY Media format is not expected here");
+            GAPI_Error("Non NV12, GRAY or BGR Media formats are not expected here");
             break;
         }
     }

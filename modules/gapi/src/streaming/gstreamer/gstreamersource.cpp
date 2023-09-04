@@ -31,7 +31,7 @@ namespace gst {
 #ifdef HAVE_GSTREAMER
 
 constexpr char ALLOWED_CAPS_STRING[] =
-    "video/x-raw,format=(string){NV12, GRAY8};video/x-raw(memory:DMABuf),format=(string){NV12, GRAY8}";
+    "video/x-raw,format=(string){NV12, GRAY8, BGR};video/x-raw(memory:DMABuf),format=(string){NV12, GRAY8, BGR}";
 
 
 namespace {
@@ -144,7 +144,7 @@ void GStreamerSource::Priv::configureAppsink() {
     GStreamerPtr<GstCaps> peerCaps(gst_pad_peer_query_caps(appsinkPad, NULL));
     if (!gst_caps_can_intersect(peerCaps, gstCaps)) {
         cv::util::throw_error(
-            std::logic_error("appsink element can only consume video-frame in NV12 or GRAY8 format in "
+            std::logic_error("appsink element can only consume video-frame in NV12, GRAY8 or BGR format in "
                              "GStreamerSource"));
     }
 
@@ -201,6 +201,11 @@ void GStreamerSource::Priv::prepareVideoMeta()
                     }
                     case GST_VIDEO_FORMAT_GRAY8: {
                         m_mediaFrameMeta = GFrameDesc{ cv::MediaFormat::GRAY, cv::Size(width, height) };
+                        GAPI_Assert(GST_VIDEO_INFO_N_PLANES(&m_videoInfo) == 1);
+                        break;
+                    }
+                    case GST_VIDEO_FORMAT_BGR: {
+                        m_mediaFrameMeta = GFrameDesc{ cv::MediaFormat::BGR, cv::Size(width, height) };
                         GAPI_Assert(GST_VIDEO_INFO_N_PLANES(&m_videoInfo) == 1);
                         break;
                     }
@@ -314,6 +319,14 @@ bool GStreamerSource::Priv::retrieveFrame(cv::Mat& data)
                     GST_VIDEO_FRAME_PLANE_OFFSET(&videoFrame, 0),
                     GST_VIDEO_FRAME_PLANE_STRIDE(&videoFrame, 0));
                 cv::cvtColor(y, data, cv::COLOR_GRAY2BGR);
+                break;
+            }
+            case GST_VIDEO_FORMAT_BGR: {
+                GAPI_Assert(GST_VIDEO_INFO_N_COMPONENTS(&m_videoInfo) == 3);
+                data =  cv::Mat(m_matMeta.size, CV_8UC3,
+                    (uint8_t*)GST_VIDEO_FRAME_PLANE_DATA(&videoFrame, 0) +
+                    GST_VIDEO_FRAME_PLANE_OFFSET(&videoFrame, 0),
+                    GST_VIDEO_FRAME_PLANE_STRIDE(&videoFrame, 0));
                 break;
             }
             default: {
