@@ -304,6 +304,7 @@ PyObject* pyopencv_from(const cv::detail::OpaqueRef& o)
         case cv::detail::OpaqueKind::CV_BOOL      : return pyopencv_from(o.rref<bool>());
         case cv::detail::OpaqueKind::CV_INT       : return pyopencv_from(o.rref<int>());
         case cv::detail::OpaqueKind::CV_INT64     : return pyopencv_from(o.rref<int64_t>());
+        case cv::detail::OpaqueKind::CV_UINT64    : return pyopencv_from(o.rref<uint64_t>());
         case cv::detail::OpaqueKind::CV_DOUBLE    : return pyopencv_from(o.rref<double>());
         case cv::detail::OpaqueKind::CV_FLOAT     : return pyopencv_from(o.rref<float>());
         case cv::detail::OpaqueKind::CV_STRING    : return pyopencv_from(o.rref<std::string>());
@@ -314,7 +315,6 @@ PyObject* pyopencv_from(const cv::detail::OpaqueRef& o)
         case cv::detail::OpaqueKind::CV_RECT      : return pyopencv_from(o.rref<cv::Rect>());
         case cv::detail::OpaqueKind::CV_UNKNOWN   : return pyopencv_from(o.rref<cv::GArg>());
         case cv::detail::OpaqueKind::CV_DRAW_PRIM : return pyopencv_from(o.rref<cv::gapi::wip::draw::Prim>());
-        case cv::detail::OpaqueKind::CV_UINT64    : break;
         case cv::detail::OpaqueKind::CV_SCALAR    : break;
         case cv::detail::OpaqueKind::CV_MAT       : break;
     }
@@ -331,6 +331,7 @@ PyObject* pyopencv_from(const cv::detail::VectorRef& v)
         case cv::detail::OpaqueKind::CV_BOOL      : return pyopencv_from_generic_vec(v.rref<bool>());
         case cv::detail::OpaqueKind::CV_INT       : return pyopencv_from_generic_vec(v.rref<int>());
         case cv::detail::OpaqueKind::CV_INT64     : return pyopencv_from_generic_vec(v.rref<int64_t>());
+        case cv::detail::OpaqueKind::CV_UINT64    : return pyopencv_from_generic_vec(v.rref<uint64_t>());
         case cv::detail::OpaqueKind::CV_DOUBLE    : return pyopencv_from_generic_vec(v.rref<double>());
         case cv::detail::OpaqueKind::CV_FLOAT     : return pyopencv_from_generic_vec(v.rref<float>());
         case cv::detail::OpaqueKind::CV_STRING    : return pyopencv_from_generic_vec(v.rref<std::string>());
@@ -343,7 +344,6 @@ PyObject* pyopencv_from(const cv::detail::VectorRef& v)
         case cv::detail::OpaqueKind::CV_MAT       : return pyopencv_from_generic_vec(v.rref<cv::Mat>());
         case cv::detail::OpaqueKind::CV_UNKNOWN   : return pyopencv_from_generic_vec(v.rref<cv::GArg>());
         case cv::detail::OpaqueKind::CV_DRAW_PRIM : return pyopencv_from_generic_vec(v.rref<cv::gapi::wip::draw::Prim>());
-        case cv::detail::OpaqueKind::CV_UINT64    : break;
     }
 
     PyErr_SetString(PyExc_TypeError, "Unsupported GArray type");
