@@ -123,6 +123,8 @@ void TrackedObjects::update(cv::gapi::ot::TrackedObjectInfo&& tracked_object) {
     }
 }
 
+// Helper functions for OT kernels
+namespace {
 void GTrackImplSetup(cv::GArrayDesc, cv::GArrayDesc, float,
                       std::shared_ptr<TrackedObjects>& state,
                       const ObjectTrackerParams& params) {
@@ -154,14 +156,15 @@ void GTrackImplPrepare(const std::vector<cv::Rect>& in_rects,
 
     detected_objs.reserve(in_rects.size());
 
-    int32_t n_detected_objects = in_rects.size();
-    for (int32_t i = 0; i < n_detected_objects; ++i)
+    std::size_t n_detected_objects = in_rects.size();
+    for (std::size_t i = 0; i < n_detected_objects; ++i)
     {
         detected_objs.emplace_back(in_rects[i], in_class_labels[i]);
     }
 
     state.m_tracker->SetFrameDeltaTime(delta);
 }
+} // anonymous namespace
 
 GAPI_OCV_KERNEL_ST(GTrackFromMatImpl, cv::gapi::ot::GTrackFromMat, TrackedObjects)
 {
@@ -243,7 +246,7 @@ GAPI_OCV_KERNEL_ST(GTrackFromFrameImpl, cv::gapi::ot::GTrackFromFrame, TrackedOb
             } else {
                 in = cv::Mat(desc.size, CV_8UC1, ptrs[0]);
             }
-        }      
+        }
 
         auto objects = state.m_tracker->Track(in, detected_objs);
 
@@ -261,18 +264,22 @@ GAPI_OCV_KERNEL_ST(GTrackFromFrameImpl, cv::gapi::ot::GTrackFromFrame, TrackedOb
     }
 };
 
-GAPI_EXPORTS_W GTrackedInfo track(const cv::GMat& mat,
-                                  const cv::GArray<cv::Rect>& detected_rects,
-                                  const cv::GArray<int>& detected_class_labels,
-                                  float delta)
+GAPI_EXPORTS_W std::tuple<cv::GArray<cv::Rect>,
+                          cv::GArray<uint64_t>,
+                          cv::GArray<uint64_t>> track(const cv::GMat& mat,
+                                                      const cv::GArray<cv::Rect>& detected_rects,
+                                                      const cv::GArray<int>& detected_class_labels,
+                                                      float delta)
 {
     return GTrackFromMat::on(mat, detected_rects, detected_class_labels, delta);
 }
 
-GAPI_EXPORTS_W GTrackedInfo track(const cv::GFrame& frame,
-                                  const cv::GArray<cv::Rect>& detected_rects,
-                                  const cv::GArray<int>& detected_class_labels,
-                                  float delta)
+GAPI_EXPORTS_W std::tuple<cv::GArray<cv::Rect>,
+                          cv::GArray<uint64_t>,
+                          cv::GArray<uint64_t>> track(const cv::GFrame& frame,
+                                                      const cv::GArray<cv::Rect>& detected_rects,
+                                                      const cv::GArray<int>& detected_class_labels,
+                                                      float delta)
 {
     return GTrackFromFrame::on(frame, detected_rects, detected_class_labels, delta);
 }
@@ -289,4 +296,3 @@ cv::gapi::GKernelPackage kernels()
 }   // namespace ot
 }   // namespace gapi
 }   // namespace cv
-

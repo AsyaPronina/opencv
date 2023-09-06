@@ -7,6 +7,9 @@
 #ifndef OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_RGB_HISTOGRAM_HPP
 #define OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_RGB_HISTOGRAM_HPP
 
+#include <cstdint>
+#include <opencv2/core.hpp>
+
 namespace vas {
 namespace ot {
 

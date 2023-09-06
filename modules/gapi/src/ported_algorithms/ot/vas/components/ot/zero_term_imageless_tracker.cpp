@@ -140,7 +140,7 @@ int32_t ZeroTermImagelessTracker::TrackObjects(const cv::Mat &mat, const std::ve
             if (static_cast<int32_t>(tracklets_.size()) >= max_objects_ && max_objects_ != -1)
                 continue;
 
-            auto tracklet = std::make_unique<ZeroTermImagelessTracklet>();
+            std::unique_ptr<ZeroTermImagelessTracklet> tracklet(new ZeroTermImagelessTracklet());
 
             tracklet->status = ST_NEW;
             tracklet->id = GetNextTrackingID();

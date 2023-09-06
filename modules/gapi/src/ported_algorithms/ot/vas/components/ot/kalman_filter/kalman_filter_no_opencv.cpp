@@ -68,7 +68,8 @@ cv::Rect2f KalmanFilterNoOpencv::Predict(float delta_tf) {
     auto height = 2 * ry;
 
     // printf(" - In Predict: result (%d, %d  %dx%d)\n", pre_x, pre_y, width, height);
-    return cv::Rect2f(pre_x, pre_y, width, height);
+    return cv::Rect2f(float(pre_x), float(pre_y),
+                      float(width), float(height));
 }
 
 cv::Rect2f KalmanFilterNoOpencv::Correct(const cv::Rect2f &measured_region) {
@@ -125,7 +126,8 @@ cv::Rect2f KalmanFilterNoOpencv::Correct(const cv::Rect2f &measured_region) {
     auto height = (cRY >> (KALMAN_FILTER_NSHIFT - 1));
 
     // printf(" - In Correct: result (%d, %d  %dx%d)\n", x, y, width, height);
-    return cv::Rect2f(x, y, width, height);
+    return cv::Rect2f(float(x), float(y),
+                      float(width), float(height));
 }
 
 void KalmanFilterNoOpencv::kalmanfilter1d32i_init(kalmanfilter1d32i *kf, int32_t *z, int32_t var) {
@@ -183,8 +185,8 @@ static void add_matmat_32i(int32_t A_B[2][2], int32_t A[2][2], int32_t B[2][2]) 
 }
 
 void KalmanFilterNoOpencv::kalmanfilter1d32i_predict_phase(kalmanfilter1d32i *kf, float dt) {
-    float F[2][2] = {1.f, 1.f, 0.f, 1.f};
-    float A[2][2] = {1.f, 1.f, 0.f, 1.f};
+    float F[2][2] = {{1.f, 1.f}, {0.f, 1.f}};
+    float A[2][2] = {{1.f, 1.f}, {0.f, 1.f}};
     int32_t AP[2][2];
     int32_t APAt[2][2];
 

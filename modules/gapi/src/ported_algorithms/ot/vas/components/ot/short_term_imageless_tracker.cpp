@@ -207,7 +207,7 @@ int32_t ShortTermImagelessTracker::TrackObjects(const cv::Mat &mat, const std::v
             if (static_cast<int32_t>(tracklets_.size()) >= max_objects_ && max_objects_ != -1)
                 continue;
 
-            auto tracklet = std::make_unique<ShortTermImagelessTracklet>();
+            std::unique_ptr<ShortTermImagelessTracklet> tracklet(new ShortTermImagelessTracklet());
 
             tracklet->status = ST_NEW;
             tracklet->id = GetNextTrackingID();

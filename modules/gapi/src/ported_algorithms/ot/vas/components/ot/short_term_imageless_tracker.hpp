@@ -21,7 +21,7 @@ class ShortTermImagelessTracker : public Tracker {
     virtual ~ShortTermImagelessTracker();
 
     virtual int32_t TrackObjects(const cv::Mat &mat, const std::vector<Detection> &detections,
-                                 std::vector<std::shared_ptr<Tracklet>> *tracklets, float delta_t);
+            std::vector<std::shared_ptr<Tracklet>> *tracklets, float delta_t) override;
 
     ShortTermImagelessTracker(const ShortTermImagelessTracker &) = delete;
     ShortTermImagelessTracker &operator=(const ShortTermImagelessTracker &) = delete;

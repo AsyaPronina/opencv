@@ -109,8 +109,8 @@ ZeroTermImagelessTracklet::~ZeroTermImagelessTracklet() {
 void ZeroTermImagelessTracklet::RenewTrajectory(const cv::Rect2f &bounding_box) {
     float velo_x = bounding_box.x - trajectory.back().x;
     float velo_y = bounding_box.y - trajectory.back().y;
-    cv::Rect rect_predict(bounding_box.x + velo_x / 3, bounding_box.y + velo_y / 3, bounding_box.width,
-                          bounding_box.height);
+    cv::Rect rect_predict(int(bounding_box.x + velo_x / 3), int(bounding_box.y + velo_y / 3),
+                          int(bounding_box.width), int(bounding_box.height));
 
     ClearTrajectory();
     kalman_filter.reset(new KalmanFilterNoOpencv(bounding_box));
@@ -130,8 +130,8 @@ ShortTermImagelessTracklet::~ShortTermImagelessTracklet() {
 void ShortTermImagelessTracklet::RenewTrajectory(const cv::Rect2f &bounding_box) {
     float velo_x = bounding_box.x - trajectory.back().x;
     float velo_y = bounding_box.y - trajectory.back().y;
-    cv::Rect rect_predict(bounding_box.x + velo_x / 3, bounding_box.y + velo_y / 3, bounding_box.width,
-                          bounding_box.height);
+    cv::Rect rect_predict(int(bounding_box.x + velo_x / 3), int(bounding_box.y + velo_y / 3),
+                          int(bounding_box.width), int(bounding_box.height));
 
     ClearTrajectory();
     kalman_filter.reset(new KalmanFilterNoOpencv(bounding_box));

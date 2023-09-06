@@ -13,6 +13,10 @@
 
 namespace cv {
 namespace gapi {
+/**
+ * @brief This namespace contains G-API Operation Types for
+ * VAS Object Tracking module functionality.
+ */
 namespace ot {
 
 // FIXME: copied from vasot
@@ -101,7 +105,7 @@ using GTrackedInfo = std::tuple<cv::GArray<cv::Rect>, cv::GArray<uint64_t>, cv::
 
 G_API_OP(GTrackFromMat, <GTrackedInfo(cv::GMat, cv::GArray<cv::Rect>, cv::GArray<int32_t>, float)>, "com.intel.track_from_mat")
 {
-    static std::tuple<cv::GArrayDesc, cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GMatDesc in, cv::GArrayDesc, cv::GArrayDesc, float)
+    static std::tuple<cv::GArrayDesc, cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GMatDesc, cv::GArrayDesc, cv::GArrayDesc, float)
     {
         return std::make_tuple(cv::empty_array_desc(), cv::empty_array_desc(), cv::empty_array_desc());
     }
@@ -131,22 +135,22 @@ G_API_OP(GTrackFromFrame, <GTrackedInfo(cv::GFrame, cv::GArray<cv::Rect>, cv::GA
  * @param detected_class_labels     Detected objects class labels in the input frame.
  * @param delta                     Frame_delta_t Delta time between two consecutive tracking in seconds.
  *                                  The valid range is [0.005 ~ 0.5].
- * @return                          Tracking result of a target object.
- *                                  It contains tracking information of a target object.
- *                                  cv::Rect    Object trectangle.
- *                                  uint64_t    Tracking ID. Numbering sequence starts from 1.
- *                                              The value 0 means the tracking ID of this object has
- *                                              not been assigned.
- *                                  int32_t     Class label. This is specified by the detected_class_labels
- *                                              which are used in cv::gapi::ot::Track.
- *                                  int32_t     Tracking status. 0(NEW), 1(TRACKED), 2(LOST)
- *                                  int32_t     Association index. Index in the detected_rects which are
- *                                              used in cv::gapi::ot::Track.
+ * @return                          Tracking results of target objects.
+ *                                  cv::GArray<cv::Rect>    Array of object rectangles that are NEW to the tracker
+                                                            (have appeared for first time in given frame) or that
+                                                            have expired tracking validity and need to be refreshed.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs for object rectangles above.
+                                                            Numbering sequence starts from 1.
+ *                                                          The value 0 means the tracking ID of this object has
+ *                                                          not been assigned.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs of lost objects.
  */
-GAPI_EXPORTS_W GTrackedInfo track(const cv::GMat& mat,
-                                  const cv::GArray<cv::Rect>& detected_rects,
-                                  const cv::GArray<int>& detected_class_labels,
-                                  float delta);
+GAPI_EXPORTS_W std::tuple<cv::GArray<cv::Rect>,
+                          cv::GArray<uint64_t>,
+                          cv::GArray<uint64_t>> track(const cv::GMat& mat,
+                                                      const cv::GArray<cv::Rect>& detected_rects,
+                                                      const cv::GArray<int>& detected_class_labels,
+                                                      float delta);
 
 /**
  * @brief   Tracks objects with video frames. Overload of track(...) for frame as GFrame.
@@ -156,26 +160,34 @@ GAPI_EXPORTS_W GTrackedInfo track(const cv::GMat& mat,
  * @param detected_class_labels     Detected objects class labels in the input frame.
  * @param delta                     Frame_delta_t Delta time between two consecutive tracking in seconds.
  *                                  The valid range is [0.005 ~ 0.5].
- * @return                          Tracking result of a target object.
- *                                  It contains tracking information of a target object.
- *                                  cv::Rect    Object trectangle.
- *                                  uint64_t    Tracking ID. Numbering sequence starts from 1.
- *                                              The value 0 means the tracking ID of this object has
- *                                              not been assigned.
- *                                  int32_t     Class label. This is specified by the detected_class_labels
- *                                              which are used in cv::gapi::ot::Track.
- *                                  int32_t     Tracking status. 0(NEW), 1(TRACKED), 2(LOST)
- *                                  int32_t     Association index. Index in the detected_rects which are
- *                                              used in cv::gapi::ot::Track.
+ * @return                          Tracking results of target objects.
+ *                                  cv::GArray<cv::Rect>    Array of object rectangles that are NEW to the tracker
+                                                            (have appeared for first time in given frame) or that
+                                                            have expired tracking validity and need to be refreshed.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs for object rectangles above.
+                                                            Numbering sequence starts from 1.
+ *                                                          The value 0 means the tracking ID of this object has
+ *                                                          not been assigned.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs of lost objects.
  */
-GAPI_EXPORTS_W GTrackedInfo track(const cv::GFrame& frame,
-                                  const cv::GArray<cv::Rect>& detected_rects,
-                                  const cv::GArray<int>& detected_class_labels,
-                                  float delta);
+GAPI_EXPORTS_W std::tuple<cv::GArray<cv::Rect>,
+                          cv::GArray<uint64_t>,
+                          cv::GArray<uint64_t>> track(const cv::GFrame& frame,
+                                                      const cv::GArray<cv::Rect>& detected_rects,
+                                                      const cv::GArray<int>& detected_class_labels,
+                                                      float delta);
+} // namespace ot
+} // namespace gapi
+} // namespace cv
 
-
-GAPI_EXPORTS_W cv::gapi::GKernelPackage kernels();
-
+namespace cv {
+namespace gapi {
+/**
+ * @brief This namespace contains G-API Operation Types for
+ * VAS Object Tracking module functionality.
+ */
+namespace ot {
+GAPI_EXPORTS_W GKernelPackage kernels();
 } // namespace ot
 } // namespace gapi
 } // namespace cv

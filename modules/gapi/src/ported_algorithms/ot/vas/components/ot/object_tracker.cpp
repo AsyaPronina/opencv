@@ -91,8 +91,10 @@ class ObjectTracker::Impl {
     friend class ObjectTracker::Builder;
 };
 
+namespace {
 void vas_exit() {
 }
+} // anonymous namespace
 
 ObjectTracker::ObjectTracker(ObjectTracker::Impl *impl) : impl_(impl) {
     atexit(vas_exit);

@@ -7,6 +7,10 @@
 #ifndef OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_HUNGARIAN_WRAP_HPP
 #define OPENCV_GAPI_PORTED_ALGORITHMS_VAS_OT_HUNGARIAN_WRAP_HPP
 
+#include <cstdint>
+#include <vector>
+#include <opencv2/core.hpp>
+
 namespace vas {
 namespace ot {
 

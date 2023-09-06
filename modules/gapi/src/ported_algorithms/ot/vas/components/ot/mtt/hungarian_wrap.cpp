@@ -109,7 +109,6 @@ void HungarianAlgo::SolveHungarian() {
     int32_t k = 0;
     int32_t l = 0;
     int32_t unmatched = 0;
-    int32_t cost = 0;
 
     ETHROW(problem_.cost.size() != 0 && problem_.assignment.size() != 0, logic_error, "Unexpected solve");
 
@@ -151,7 +150,6 @@ void HungarianAlgo::SolveHungarian() {
                 s = problem_.cost[j][i];
         }
 
-        cost += s;
         if (s != 0) {
             for (int32_t j = 0; j < problem_.num_rows; ++j)
                 problem_.cost[j][i] -= s;
