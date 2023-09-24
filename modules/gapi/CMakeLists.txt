@@ -65,7 +65,6 @@ file(GLOB gapi_ext_hdrs
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/streaming/gstreamer/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/streaming/onevpl/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/plaidml/*.hpp"
-    "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/ported_algorithms/ot/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/util/*.hpp"
     )
 
@@ -89,6 +88,7 @@ set(gapi_srcs
     src/api/kernels_imgproc.cpp
     src/api/kernels_video.cpp
     src/api/kernels_nnparsers.cpp
+    src/api/kernels_ot.cpp
     src/api/kernels_streaming.cpp
     src/api/kernels_stereo.cpp
     src/api/render.cpp
@@ -131,6 +131,7 @@ set(gapi_srcs
     src/backends/cpu/gcpustereo.cpp
     src/backends/cpu/gcpuvideo.cpp
     src/backends/cpu/gcpucore.cpp
+    src/backends/cpu/gcpuot.cpp
     src/backends/cpu/gnnparsers.cpp
 
     # Fluid Backend (also built-in, FIXME:move away)
@@ -190,18 +191,6 @@ set(gapi_srcs
     src/backends/onnx/bindings_onnx.cpp
     src/backends/ov/bindings_ov.cpp
     src/backends/python/gpythonbackend.cpp
-
-    # VAS Object Tracking ported algorithm:
-    src/ported_algorithms/ot/vas/components/ot/kalman_filter/kalman_filter_no_opencv.cpp
-    src/ported_algorithms/ot/vas/components/ot/mtt/hungarian_wrap.cpp
-    src/ported_algorithms/ot/vas/components/ot/mtt/objects_associator.cpp
-    src/ported_algorithms/ot/vas/components/ot/mtt/rgb_histogram.cpp
-    src/ported_algorithms/ot/vas/components/ot/object_tracker.cpp
-    src/ported_algorithms/ot/vas/components/ot/short_term_imageless_tracker.cpp
-    src/ported_algorithms/ot/vas/components/ot/tracker.cpp
-    src/ported_algorithms/ot/vas/components/ot/tracklet.cpp
-    src/ported_algorithms/ot/vas/components/ot/zero_term_imageless_tracker.cpp
-    src/ported_algorithms/ot/ot.cpp
 
     # Queue Streaming source
     src/streaming/queue_source.cpp
@@ -392,9 +381,11 @@ if(HAVE_ONNX)
   endif()
 endif()
 
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/3rdparty/vasot ${CMAKE_CURRENT_BINARY_DIR}//3rdparty/vasot)
+ocv_target_link_libraries(${the_module} PRIVATE gapi.3rdparty.vasot)
+
 ocv_add_perf_tests()
 ocv_add_samples()
-
 
 # Required for sample with inference on host
 if(TARGET example_gapi_onevpl_infer_with_advanced_device_selection)
