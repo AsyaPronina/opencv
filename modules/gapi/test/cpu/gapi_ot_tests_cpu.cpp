@@ -106,10 +106,10 @@ GAPI_OCV_KERNEL_ST(OCV_CvVideo768x576_Classify, CvVideo768x576_Classify,
             auto all_boxes = state.boxes[state.frame_no];
             auto all_labels = state.labels[state.frame_no];
 
-            for (const auto& roi : rois) {
-                for (std::size_t i = 0; i < all_labels.size(); ++i) {
-                    if (roi == all_boxes[i]) {
-                        out_labels[i] = all_labels[i];
+            for (std::size_t i = 0; i < rois.size(); ++i) {
+                for (std::size_t j = 0; j < all_labels.size(); ++j) {
+                    if (rois[i] == all_boxes[j]) {
+                        out_labels[i] = all_labels[j];
                     }
                 }
             }
@@ -119,22 +119,26 @@ GAPI_OCV_KERNEL_ST(OCV_CvVideo768x576_Classify, CvVideo768x576_Classify,
     }
 };
 
-using LostIds = cv::GArray<uint64_t>;
 using ROIs = cv::GArray<cv::Rect>;
-using TrackedIds = cv::GArray<uint64_t>;
+using Ids = cv::GArray<uint64_t>;
 
-G_API_OP(TrackedFilterOutOfBounds, <std::tuple<ROIs, TrackedIds>(ROIs, TrackedIds)>,
+G_API_OP(TrackedFilterOutOfBounds, <std::tuple<ROIs, Ids, Ids>(ROIs, Ids, Ids)>,
     "test.custom.tracked_filter_out_of_bounds") {
-    static std::tuple<cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GArrayDesc, cv::GArrayDesc) {
-        return std::make_tuple(cv::empty_array_desc(), cv::empty_array_desc());
+    static std::tuple<cv::GArrayDesc, cv::GArrayDesc, cv::GArrayDesc>
+        outMeta(cv::GArrayDesc, cv::GArrayDesc, cv::GArrayDesc) {
+        return std::make_tuple(cv::empty_array_desc(),
+                               cv::empty_array_desc(),
+                               cv::empty_array_desc());
     }
 };
 
 GAPI_OCV_KERNEL(OCVTrackedFilterOutOfBounds, TrackedFilterOutOfBounds) {
     static void run(const std::vector<cv::Rect>&in_rcts,
         const std::vector<uint64_t>&in_tr_ids,
+        const std::vector<uint64_t>&in_lost_ids,
         std::vector<cv::Rect>&out_rcts,
-        std::vector<uint64_t>&out_tr_ids) {
+        std::vector<uint64_t>&out_tr_ids,
+        std::vector<uint64_t>&out_lost_ids) {
         static int frame_no;
 
         static cv::FileStorage trackings("ot_trackings.yml", cv::FileStorage::WRITE);
@@ -151,6 +155,14 @@ GAPI_OCV_KERNEL(OCVTrackedFilterOutOfBounds, TrackedFilterOutOfBounds) {
             out_rcts.push_back(rc);
             trackings << "x" << rc.x << "y" << rc.y;
             trackings << "width" << rc.width << "height" << rc.height;
+            trackings << "}";
+        }
+        for (uint32_t i = 0; i < in_lost_ids.size(); ++i) {
+            trackings << "box_" + std::to_string(i) << "{";
+
+            out_lost_ids.push_back(in_lost_ids[i]);
+            trackings << "tracking_id" << int(out_lost_ids[i]);
+            trackings << "status" << "lost";
             trackings << "}";
         }
         trackings << "}";
@@ -225,7 +237,7 @@ TEST(VASObjectTracker, PipelineTest)
     std::vector<std::vector<int>> input_boxes_ids(frames_to_handle);
     std::vector<std::vector<std::string>> input_labels(frames_to_handle);
 
-    std::string path_to_boxes = opencv_test::findDataFile("cv/video/768x576.yml", false);
+    std::string path_to_boxes = opencv_test::findDataFile("cv/video/vas_object_tracking/bottom_right_people_30_frames.yml", false);
     cv::FileStorage fs_input_boxes(path_to_boxes, cv::FileStorage::READ);
     cv::FileNode fn_input_boxes = fs_input_boxes.root();
     for (auto it = fn_input_boxes.begin(); it != fn_input_boxes.end(); ++it) {
@@ -260,8 +272,9 @@ TEST(VASObjectTracker, PipelineTest)
     // Filter out of bounds tracked objects
     cv::GArray<cv::Rect> filtered_tr_objs;
     cv::GArray<uint64_t> filtered_tr_ids;
-    std::tie(filtered_tr_objs, filtered_tr_ids) = TrackedFilterOutOfBounds::on(detections_to_update,
-        tracking_ids);
+    cv::GArray<uint64_t> filtered_tr_ids_to_remove;
+    std::tie(filtered_tr_objs, filtered_tr_ids, filtered_tr_ids_to_remove) = TrackedFilterOutOfBounds::on(detections_to_update,
+        tracking_ids, tracking_ids_to_remove);
 
     // Run Inference for classifier on the passed ROIs of the frame
     cv::GArray<std::string> labels = CvVideo768x576_Classify::on(filtered_tr_objs);
@@ -273,6 +286,10 @@ TEST(VASObjectTracker, PipelineTest)
 
     cv::GComputation ccomp(cv::GIn(in), cv::GOut(complete_filtered_cls_labels));
 
+    // Object tracking parameters
+    cv::gapi::ot::ObjectTrackerParams ot_params;
+    ot_params.reclassify_interval = 2;
+
     // Graph compilation for streaming mode:
     auto compiled =
         ccomp.compileStreaming(cv::compile_args(
@@ -282,7 +299,8 @@ TEST(VASObjectTracker, PipelineTest)
                                                 OCVTrackedFilterOutOfBounds>(),
                               cv::gapi::ot::cpu::kernels()),
             opencv_test::FrameDetectionsParams{ 0, input_boxes, input_boxes_ids },
-            opencv_test::FrameLabelsParams{ 0, input_boxes, input_labels }));
+            opencv_test::FrameLabelsParams{ 0, input_boxes, input_labels },
+            ot_params));
 
     EXPECT_TRUE(compiled);
     EXPECT_FALSE(compiled.running());

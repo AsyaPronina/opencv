@@ -28,6 +28,10 @@ struct TrackedObjectInfo
                                    cv::gapi::ot::Track. */
 };
 
+// Rework algorithm to count state transfer
+// if we have another state machine or just
+// more transparently reflects inner one.
+// 20 frames to lost -> new.
 struct TrackedObjects {
     using object_id_t = uint64_t;
     using counter_t = uint64_t;
@@ -46,18 +50,25 @@ struct TrackedObjects {
     void process_lost_id(object_id_t id);
     void process_tracked_id(object_id_t id, const cv::Rect& obj);
     void process_new_id(object_id_t id, const cv::Rect& obj);
-    void cleanup();
+    void clear_current_info();
     TrackedInfoTuple get_info();
+
+    void reset();
 };
 
 TrackedObjects::TrackedObjects(std::shared_ptr<vas::ot::ObjectTracker>&& tracker,
                                size_t interval): m_interval(interval), m_tracker(tracker) {}
 
-void TrackedObjects::cleanup() {
-    m_map.clear();
+void TrackedObjects::clear_current_info() {
     m_objs.clear();
     m_tr_ids.clear();
     m_lost_ids.clear();
+    m_map.clear();
+}
+
+void TrackedObjects::reset() {
+    clear_current_info();
+    m_map.clear();
 }
 
 TrackedInfoTuple TrackedObjects::get_info() {
@@ -86,6 +97,10 @@ void TrackedObjects::process_tracked_id(object_id_t id, const cv::Rect& obj) {
             m_objs.push_back(obj);
             m_tr_ids.push_back(it->first);
         }
+    } else { // Was lost, but renewed - will have status "TRACKED"
+        //m_map[id] = 0;
+        //m_objs.push_back(obj);
+        //m_tr_ids.push_back(id);
     }
 }
 
@@ -103,6 +118,8 @@ void TrackedObjects::process_new_id(object_id_t id, const cv::Rect& obj) {
 }
 
 void TrackedObjects::update(cv::gapi::ot::TrackedObjectInfo&& tracked_object) {
+    static int frame_no;
+
     switch (TrackingStatus(tracked_object.status)) {
         case TrackingStatus::LOST:
         {
@@ -122,6 +139,8 @@ void TrackedObjects::update(cv::gapi::ot::TrackedObjectInfo&& tracked_object) {
         default:
             cv::util::throw_error(std::logic_error("Unsupported tracking status"));
     }
+
+    ++frame_no;
 }
 
 // Helper functions for OT kernels
@@ -186,6 +205,7 @@ GAPI_OCV_KERNEL_ST(GTrackFromMatImpl, cv::gapi::ot::GTrackFromMat, TrackedObject
                     std::vector<cv::Rect>& out_rects, std::vector<uint64_t>& out_tr_ids,
                     std::vector<uint64_t>& out_lost_ids, TrackedObjects& state)
     {
+        static int frame;
         std::vector<vas::ot::DetectedObject> detected_objs;
         GTrackImplPrepare(in_rects, in_class_labels, delta, detected_objs, state);
 
@@ -203,7 +223,9 @@ GAPI_OCV_KERNEL_ST(GTrackFromMatImpl, cv::gapi::ot::GTrackFromMat, TrackedObject
         }
 
         std::tie(out_rects, out_tr_ids, out_lost_ids) = state.get_info();
-        state.cleanup();
+        state.clear_current_info();
+
+        ++frame;
     }
 };
 
@@ -261,7 +283,7 @@ GAPI_OCV_KERNEL_ST(GTrackFromFrameImpl, cv::gapi::ot::GTrackFromFrame, TrackedOb
         }
 
         std::tie(out_rects, out_tr_ids, out_lost_ids) = state.get_info();
-        state.cleanup();
+        state.clear_current_info();
     }
 };
 

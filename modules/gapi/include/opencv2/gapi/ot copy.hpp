@@ -38,6 +38,24 @@ enum class TrackingStatus: int32_t
 struct ObjectTrackerParams
 {
     /**
+     * Number of frames to reclassify an object upon reaching
+     */
+    size_t reclassify_interval = 20;
+
+    /**
+     * Tracking type for newly created ObjectTracker instance.
+     * @n
+     * 0(LONG_TERM), 1(SHORT_TERM), 2(ZERO_TERM), 3(SHORT_TERM_KCFVAR), 4(SHORT_TERM_IMAGELESS)
+     * 5(ZERO_TERM_IMAGLESS), 6(ZERO_TERM_COLOR_HISTOGRAM)
+     */
+    int32_t tracking_type = 5;
+
+    /**
+     * Specifies HW backend on which object tracker runs. 0(CPU), 2(VPU)
+     */
+    int32_t backend_type = 0;
+
+    /**
      * Maximum number of trackable objects in a frame.
      * Valid range: 1 <= max_num_objects. Or it can be -1 if there is no limitation
      * of maximum number in X86. KMB/TBH has limitation up to 1024.
@@ -65,29 +83,39 @@ struct ObjectTrackerParams
      */
     bool tracking_per_class = true;
 
+    /**
+     * Platform configuration.
+     * You can set various configurations for each platform such as CPU, KMB, and TBH using
+     * predefined configurations.
+     */
+    std::map<std::string, std::string> platform_config;
+
     bool operator==(const ObjectTrackerParams& other) const
     {
-        return max_num_objects == other.max_num_objects
+        return tracking_type == other.tracking_type
+            && backend_type == other.backend_type
+            && max_num_objects == other.max_num_objects
             && input_image_format == other.input_image_format
-            && tracking_per_class == other.tracking_per_class;
+            && tracking_per_class == other.tracking_per_class
+            && platform_config == other.platform_config;
     }
 };
 
-using GTrackedInfo = std::tuple<cv::GArray<uint64_t>, cv::GArray<TrackingStatus>>;
+using GTrackedInfo = std::tuple<cv::GArray<cv::Rect>, cv::GArray<uint64_t>, cv::GArray<uint64_t>>;
 
 G_API_OP(GTrackFromMat, <GTrackedInfo(cv::GMat, cv::GArray<cv::Rect>, cv::GArray<int32_t>, float)>, "com.intel.track_from_mat")
 {
-    static std::tuple<cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GMatDesc, cv::GArrayDesc, cv::GArrayDesc, float)
+    static std::tuple<cv::GArrayDesc, cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GMatDesc, cv::GArrayDesc, cv::GArrayDesc, float)
     {
-        return std::make_tuple(cv::empty_array_desc(), cv::empty_array_desc());
+        return std::make_tuple(cv::empty_array_desc(), cv::empty_array_desc(), cv::empty_array_desc());
     }
 };
 
 G_API_OP(GTrackFromFrame, <GTrackedInfo(cv::GFrame, cv::GArray<cv::Rect>, cv::GArray<int32_t>, float)>, "com.intel.track_from_frame")
 {
-    static std::tuple<cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GFrameDesc, cv::GArrayDesc, cv::GArrayDesc, float)
+    static std::tuple<cv::GArrayDesc, cv::GArrayDesc, cv::GArrayDesc> outMeta(cv::GFrameDesc, cv::GArrayDesc, cv::GArrayDesc, float)
     {
-       return std::make_tuple(cv::empty_array_desc(), cv::empty_array_desc());
+       return std::make_tuple(cv::empty_array_desc(), cv::empty_array_desc(), cv::empty_array_desc());
     }
 };
 
@@ -97,7 +125,9 @@ G_API_OP(GTrackFromFrame, <GTrackedInfo(cv::GFrame, cv::GArray<cv::Rect>, cv::GA
  *          informationis updated with the input detected object.
  *          On the other hand, if a detected object is overlapped with none of tracked objects,
  *          the detected object is newly added and ObjectTracker starts to track the object.
- *          In zero term tracking type, ObjectTracker clears tracked objects in case that empty
+ *          In long term and short term tracking type, ObjectTracker continues to track objects in case
+ *          that empty list of detected objects is passed in.
+ *          In zero term tracking type, however, ObjectTracker clears tracked objects in case that empty
  *          list of detected objects is passed in.
  *
  * @param mat                       Input frame.
@@ -106,17 +136,21 @@ G_API_OP(GTrackFromFrame, <GTrackedInfo(cv::GFrame, cv::GArray<cv::Rect>, cv::GA
  * @param delta                     Frame_delta_t Delta time between two consecutive tracking in seconds.
  *                                  The valid range is [0.005 ~ 0.5].
  * @return                          Tracking results of target objects.
- *                                  cv::GArray<uint64_t>          Array of tracking IDs for passed rectangles.
-                                                                  Numbering sequence starts from 1.
- *                                                                The value 0 means the tracking ID of this object has
- *                                                                not been assigned.
- *                                  cv::GArray<TrackingStatus>    Array of tracking IDs of lost objects.
+ *                                  cv::GArray<cv::Rect>    Array of object rectangles that are NEW to the tracker
+                                                            (have appeared for first time in given frame) or that
+                                                            have expired tracking validity and need to be refreshed.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs for object rectangles above.
+                                                            Numbering sequence starts from 1.
+ *                                                          The value 0 means the tracking ID of this object has
+ *                                                          not been assigned.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs of lost objects.
  */
-GAPI_EXPORTS_W std::tuple<cv::GArray<uint64_t>,
-                          cv::GArray<TrackingStatus>> track(const cv::GMat& mat,
-                                                            const cv::GArray<cv::Rect>& detected_rects,
-                                                            const cv::GArray<int>& detected_class_labels,
-                                                            float delta);
+GAPI_EXPORTS_W std::tuple<cv::GArray<cv::Rect>,
+                          cv::GArray<uint64_t>,
+                          cv::GArray<uint64_t>> track(const cv::GMat& mat,
+                                                      const cv::GArray<cv::Rect>& detected_rects,
+                                                      const cv::GArray<int>& detected_class_labels,
+                                                      float delta);
 
 /**
  * @brief   Tracks objects with video frames. Overload of track(...) for frame as GFrame.
@@ -127,18 +161,21 @@ GAPI_EXPORTS_W std::tuple<cv::GArray<uint64_t>,
  * @param delta                     Frame_delta_t Delta time between two consecutive tracking in seconds.
  *                                  The valid range is [0.005 ~ 0.5].
  * @return                          Tracking results of target objects.
- * @return                          Tracking results of target objects.
- *                                  cv::GArray<uint64_t>          Array of tracking IDs for passed rectangles.
-                                                                  Numbering sequence starts from 1.
- *                                                                The value 0 means the tracking ID of this object has
- *                                                                not been assigned.
- *                                  cv::GArray<TrackingStatus>    Array of tracking IDs of lost objects.
+ *                                  cv::GArray<cv::Rect>    Array of object rectangles that are NEW to the tracker
+                                                            (have appeared for first time in given frame) or that
+                                                            have expired tracking validity and need to be refreshed.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs for object rectangles above.
+                                                            Numbering sequence starts from 1.
+ *                                                          The value 0 means the tracking ID of this object has
+ *                                                          not been assigned.
+ *                                  cv::GArray<uint64_t>    Array of tracking IDs of lost objects.
  */
-GAPI_EXPORTS_W std::tuple<cv::GArray<uint64_t>,
-                          cv::GArray<TrackingStatus>> track(const cv::GFrame& frame,
-                                                            const cv::GArray<cv::Rect>& detected_rects,
-                                                            const cv::GArray<int>& detected_class_labels,
-                                                            float delta);
+GAPI_EXPORTS_W std::tuple<cv::GArray<cv::Rect>,
+                          cv::GArray<uint64_t>,
+                          cv::GArray<uint64_t>> track(const cv::GFrame& frame,
+                                                      const cv::GArray<cv::Rect>& detected_rects,
+                                                      const cv::GArray<int>& detected_class_labels,
+                                                      float delta);
 } // namespace ot
 } // namespace gapi
 } // namespace cv
