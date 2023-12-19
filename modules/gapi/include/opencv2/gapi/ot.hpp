@@ -32,7 +32,7 @@ enum class TrackingStatus: int32_t
                       by specifying detected object manually. */
 };
 
-struct ObjectTrackerParams
+struct GAPI_EXPORTS_W_SIMPLE ObjectTrackerParams
 {
     /**
      * Maximum number of trackable objects in a frame.
@@ -40,12 +40,12 @@ struct ObjectTrackerParams
      * of maximum number in X86. KMB/TBH has limitation up to 1024.
      * Default value is -1 which means there is no limitation in X86. KMB/TBH is -1 means 200.
      */
-    int32_t max_num_objects = -1;
+    GAPI_PROP_RW int32_t max_num_objects = -1;
 
     /**
      * Input color format. Supports 0(BGR), 1(NV12), 2(BGRX) and 4(I420)
      */
-    int32_t input_image_format = 0;
+    GAPI_PROP_RW int32_t input_image_format = 0;
 
     /**
      * Specifies whether tracker to use detection class for keeping id of an object.
@@ -60,7 +60,7 @@ struct ObjectTrackerParams
      * @n
      * Default value is true.
      */
-    bool tracking_per_class = true;
+    GAPI_PROP_RW bool tracking_per_class = true;
 
     bool operator==(const ObjectTrackerParams& other) const
     {
